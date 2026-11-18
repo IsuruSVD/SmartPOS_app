@@ -14,10 +14,11 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDb } from '../_layout';
 import type { Payment, PaymentMethod, Sale, SaleItem } from '../../src/db/types';
 import type { Refund } from '../../src/db/repositories/RefundRepository';
-import { colors, spacing } from '../../src/ui/theme';
+import { colors, spacing, shadows } from '../../src/ui/theme';
 import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
@@ -60,10 +61,23 @@ export default function SalesScreen() {
   // Partial return state: maps sale_item_id -> quantity_milli to return
   const [partialQuantities, setPartialQuantities] = useState<Record<string, number>>({});
 
+  // Manager PIN authorization state
+  const [managerPin, setManagerPin] = useState('');
+  const [requireRefundPin, setRequireRefundPin] = useState(false);
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [enteredPin, setEnteredPin] = useState('');
+
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      setHistory(await db.sales.findHistory());
+      const [hist, settings] = await Promise.all([
+        db.sales.findHistory(),
+        db.settings.getAll(),
+      ]);
+      setHistory(hist);
+      const cfg = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+      setManagerPin(cfg.manager_pin || '');
+      setRequireRefundPin(cfg.require_refund_pin === '1');
     } catch (e) {
       Alert.alert('Sales could not load', e instanceof Error ? e.message : String(e));
     } finally {
@@ -221,7 +235,7 @@ export default function SalesScreen() {
     return subtotal + Math.round(subtotal * taxRatio);
   }, [partialQuantities, saleItems, selectedSale]);
 
-  const confirmRefund = async () => {
+  const executeRefund = async () => {
     if (!selectedSale) return;
     setRefundSaving(true);
     try {
@@ -255,6 +269,32 @@ export default function SalesScreen() {
     }
   };
 
+  const confirmRefund = async () => {
+    if (refundMode === 'partial') {
+      const returnLines = Object.entries(partialQuantities).filter(([, qtyMilli]) => qtyMilli > 0);
+      if (!returnLines.length) {
+        Alert.alert('No items selected', 'Choose at least one item quantity to return.');
+        return;
+      }
+    }
+
+    if (requireRefundPin && managerPin) {
+      setEnteredPin('');
+      setPinModalVisible(true);
+      return;
+    }
+    await executeRefund();
+  };
+
+  const verifyAndProceedRefund = async () => {
+    if (enteredPin.trim() !== managerPin.trim()) {
+      Alert.alert('Authorization Failed', 'Incorrect Manager PIN. Refund not authorized.');
+      return;
+    }
+    setPinModalVisible(false);
+    await executeRefund();
+  };
+
   const filters: { id: Filter; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'today', label: 'Today' },
@@ -267,14 +307,22 @@ export default function SalesScreen() {
       <Header title="Sales History" subtitle="Receipts & Invoices" />
 
       <View style={styles.searchRow}>
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search invoice number"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          accessibilityLabel="Search invoice number"
-        />
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search invoice number..."
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            accessibilityLabel="Search invoice number"
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.filterRow}>
@@ -303,30 +351,57 @@ export default function SalesScreen() {
             description={history.length ? 'Try a different invoice number or filter.' : 'Completed sales will appear here with their itemized receipts.'}
           />
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.saleCard}
-            onPress={() => openSale(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open invoice ${item.invoice_number}`}
-          >
-            <View style={styles.saleTop}>
-              <View style={styles.saleTitleGroup}>
-                <Text style={styles.invoice}>{item.invoice_number}</Text>
-                <Text style={styles.saleDate}>{new Date(item.completed_at ?? item.created_at).toLocaleString()}</Text>
+        renderItem={({ item }) => {
+          const isRefunded = item.status === 'refunded';
+          const isPartial = item.status === 'partially_refunded';
+          return (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.saleCard}
+              onPress={() => openSale(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open invoice ${item.invoice_number}`}
+            >
+              <View style={styles.saleTop}>
+                <View style={styles.invoiceBadgeRow}>
+                  <View style={styles.saleIconBubble}>
+                    <Ionicons
+                      name={item.payment_methods.toLowerCase().includes('card') ? 'card-outline' : 'cash-outline'}
+                      size={18}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View style={styles.saleTitleGroup}>
+                    <Text style={styles.invoice}>{item.invoice_number}</Text>
+                    <Text style={styles.saleDate}>
+                      {new Date(item.completed_at ?? item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.saleTotal}>{money(item.total_cents)}</Text>
               </View>
-              <Text style={styles.saleTotal}>{money(item.total_cents)}</Text>
-            </View>
-            <View style={styles.saleBottom}>
-              <Text style={styles.saleMeta}>
-                {item.item_count} {item.item_count === 1 ? 'line' : 'lines'} · {item.payment_methods.split(',').filter(Boolean).join(', ') || 'No payment record'}
-              </Text>
-              <Text style={[styles.saleStatus, item.status === 'refunded' && { color: colors.danger }]}>
-                {statusLabel[item.status] ?? item.status}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
+
+              <View style={styles.saleBottom}>
+                <Text style={styles.saleMeta}>
+                  {item.item_count} {item.item_count === 1 ? 'line' : 'lines'} · {item.payment_methods.split(',').filter(Boolean).join(', ').toUpperCase() || 'PAID'}
+                </Text>
+                <View style={[
+                  styles.statusTag,
+                  isRefunded && styles.statusTagRefunded,
+                  isPartial && styles.statusTagPartial,
+                ]}>
+                  <Text style={[
+                    styles.statusTagText,
+                    isRefunded && styles.statusTagTextRefunded,
+                    isPartial && styles.statusTagTextPartial,
+                  ]}>
+                    {statusLabel[item.status] ?? item.status}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
 
       {/* Sale Detail / Receipt Modal */}
@@ -513,6 +588,32 @@ export default function SalesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Manager PIN Authorization Modal */}
+      <Modal visible={pinModalVisible} transparent animationType="fade" onRequestClose={() => setPinModalVisible(false)}>
+        <View style={styles.modalShade}>
+          <View style={[styles.modalCard, { paddingBottom: spacing.xxl }]}>
+            <Text style={styles.modalTitle}>Manager Authorization</Text>
+            <Text style={styles.modalHint}>Enter 4-digit manager PIN to authorize this refund</Text>
+            <TextInput
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              placeholder="Enter PIN"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={8}
+              autoFocus
+              style={styles.reasonInput}
+              accessibilityLabel="Manager PIN"
+            />
+            <View style={styles.modalActions}>
+              <Button title="Cancel" variant="outline" onPress={() => setPinModalVisible(false)} style={styles.modalButton} />
+              <Button title="Authorize" onPress={verifyAndProceedRefund} style={styles.modalButton} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -528,23 +629,70 @@ function ReceiptValue(props: { label: string; value: number; emphasized?: boolea
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  searchRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  searchInput: { minHeight: spacing.touchTarget, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: spacing.md, fontSize: 14, color: colors.text },
+  searchRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    height: 44,
+    ...shadows.sm,
+  },
+  searchIcon: { marginRight: spacing.sm },
+  searchInput: { flex: 1, fontSize: 14, color: colors.text },
   filterRow: { flexDirection: 'row', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
-  filterChip: { flex: 1, paddingHorizontal: spacing.sm, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', minHeight: spacing.touchTarget },
+  filterChip: { flex: 1, paddingHorizontal: spacing.sm, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', minHeight: 38 },
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
-  filterTextActive: { color: colors.white, fontWeight: '600' },
+  filterText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  filterTextActive: { color: colors.white, fontWeight: '700' },
   salesList: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
   emptyList: { flexGrow: 1 },
-  saleCard: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.lg, gap: spacing.md },
-  saleTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md },
-  saleTitleGroup: { flex: 1, gap: spacing.xs },
-  invoice: { fontSize: 16, fontWeight: '700', color: colors.primary },
-  saleDate: { fontSize: 12, color: colors.textSecondary },
-  saleTotal: { fontSize: 16, fontWeight: '700', color: colors.accent },
-  saleBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderColor: colors.border, paddingTop: spacing.sm },
-  saleMeta: { fontSize: 13, color: colors.textSecondary },
+  saleCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.card,
+  },
+  saleTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  invoiceBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
+  saleIconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saleTitleGroup: { flex: 1 },
+  invoice: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  saleDate: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  saleTotal: { fontSize: 16, fontWeight: '800', color: colors.accent },
+  saleBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+  },
+  saleMeta: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
+  statusTag: {
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  statusTagRefunded: { backgroundColor: colors.dangerLight },
+  statusTagPartial: { backgroundColor: colors.warningLight },
+  statusTagText: { fontSize: 11, fontWeight: '700', color: colors.successDark, textTransform: 'uppercase' },
+  statusTagTextRefunded: { color: colors.dangerDark },
+  statusTagTextPartial: { color: colors.warningDark },
   saleStatus: { fontSize: 13, fontWeight: '600', color: colors.accent },
   modalShade: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#0007' },
   modalCard: { maxHeight: '90%', backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.xl, gap: spacing.sm },

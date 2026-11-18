@@ -1,7 +1,8 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
-import { colors } from '../../src/ui/theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { colors, shadows } from '../../src/ui/theme';
 
 export default function TabLayout() {
   return (
@@ -12,41 +13,52 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarItemStyle: styles.tabBarItem,
       }}
     >
       <Tabs.Screen
         name="pos"
         options={{
-          title: 'POS',
-          tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>🛒</Text>,
+          title: 'Register',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'calculator' : 'calculator-outline'} size={22} color={color as string} />
+          ),
         }}
       />
       <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>📊</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color as string} />
+          ),
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Inventory',
-          tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>📦</Text>,
+          title: 'Catalog',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={22} color={color as string} />
+          ),
         }}
       />
       <Tabs.Screen
         name="sales"
         options={{
-          title: 'Sales',
-          tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>🧾</Text>,
+          title: 'Transactions',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'receipt' : 'receipt-outline'} size={22} color={color as string} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'More',
-          tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>⚙️</Text>,
+          title: 'Settings',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color as string} />
+          ),
         }}
       />
     </Tabs>
@@ -55,18 +67,20 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 64,
-    paddingBottom: 8,
-    paddingTop: 6,
+    height: Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+    paddingTop: 10,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    ...shadows.card,
   },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '600',
+    marginTop: 2,
   },
-  tabIcon: {
-    fontSize: 20,
+  tabBarItem: {
+    paddingVertical: 2,
   },
 });

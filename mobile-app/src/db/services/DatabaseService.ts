@@ -33,6 +33,8 @@ import type { ReportSummary } from './ReportingService';
  *   const db = await DatabaseService.init();
  *   const products = await db.products.findAll();
  */
+import { seedDemoData, clearAllTestData, type DemoSeedResult } from './DemoDataSeeder';
+
 export class DatabaseService {
   private static _initPromise: Promise<DatabaseService> | null = null;
 
@@ -190,6 +192,17 @@ export class DatabaseService {
 
   async exportBackupJson(): Promise<string> {
     return this.reports.exportDatabaseJson();
+  }
+
+  async seedDemoData(): Promise<DemoSeedResult> {
+    const result = await seedDemoData(this.db);
+    this.stock.clearCache();
+    return result;
+  }
+
+  async clearAllTestData(): Promise<void> {
+    await clearAllTestData(this.db);
+    this.stock.clearCache();
   }
 
   /** For testing only — clears the singleton. */

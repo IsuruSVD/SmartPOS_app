@@ -14,11 +14,12 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDb } from '../_layout';
 import type { Category, Product, StockMovement } from '../../src/db/types';
 import type { Supplier } from '../../src/db/repositories/SupplierRepository';
 import type { Purchase } from '../../src/db/repositories/PurchaseRepository';
-import { colors, spacing } from '../../src/ui/theme';
+import { colors, spacing, shadows } from '../../src/ui/theme';
 import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
@@ -85,6 +86,11 @@ export default function ProductsScreen() {
   const [adjustmentNote, setAdjustmentNote] = useState('');
   const [adjustmentSaving, setAdjustmentSaving] = useState(false);
 
+  // Manager PIN authorization state
+  const [managerPin, setManagerPin] = useState('');
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [enteredPin, setEnteredPin] = useState('');
+
   // Suppliers & Purchases
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
@@ -103,12 +109,15 @@ export default function ProductsScreen() {
   const [purchaseSaving, setPurchaseSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [all, cats] = await Promise.all([
+    const [all, cats, settings] = await Promise.all([
       db.products.findAll(),
       db.categories.findAll(),
+      db.settings.getAll(),
     ]);
     setProducts(all);
     setCategories(cats);
+    const cfg = Object.fromEntries(settings.map((s) => [s.key, s.value]));
+    setManagerPin(cfg.manager_pin || '');
     const stockPairs = await Promise.all(all.map(async (p) => [p.id, await db.stock.getOnHand(p.id)] as const));
     setQuantities(Object.fromEntries(stockPairs));
     setMovements(await db.stock.findRecentMovements());
@@ -203,7 +212,7 @@ export default function ProductsScreen() {
     setAdjustmentOpen(true);
   };
 
-  const saveAdjustment = async () => {
+  const executeAdjustment = async () => {
     const quantityValid = /^\d+(\.\d{1,3})?$/.test(adjustmentQuantity);
     const quantityMilli = quantityValid ? Math.round(Number(adjustmentQuantity) * 1000) : 0;
     const selected = products.find((product) => product.id === adjustmentProductId);
@@ -222,6 +231,32 @@ export default function ProductsScreen() {
     } finally {
       setAdjustmentSaving(false);
     }
+  };
+
+  const saveAdjustment = async () => {
+    const quantityValid = /^\d+(\.\d{1,3})?$/.test(adjustmentQuantity);
+    const quantityMilli = quantityValid ? Math.round(Number(adjustmentQuantity) * 1000) : 0;
+    const selected = products.find((product) => product.id === adjustmentProductId);
+    if (!selected || !quantityMilli) {
+      Alert.alert('Check adjustment details', 'Choose a product and enter a quantity greater than zero with up to three decimal places.');
+      return;
+    }
+
+    if (managerPin) {
+      setEnteredPin('');
+      setPinModalVisible(true);
+      return;
+    }
+    await executeAdjustment();
+  };
+
+  const verifyAndProceedAdjustment = async () => {
+    if (enteredPin.trim() !== managerPin.trim()) {
+      Alert.alert('Authorization Failed', 'Incorrect Manager PIN. Stock adjustment not authorized.');
+      return;
+    }
+    setPinModalVisible(false);
+    await executeAdjustment();
   };
 
   const openPurchase = () => {
@@ -317,58 +352,59 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title="Products & Stock"
-        subtitle="Catalog & Inventory Control"
+        title="Product Catalog"
+        subtitle="Inventory & Stock"
         rightAction={
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            <TouchableOpacity
-              style={styles.categoryHeaderBtn}
-              onPress={() => setCategoryOpen(true)}
-              accessibilityLabel="Add category"
-              accessibilityRole="button"
-            >
-              <Text style={styles.categoryHeaderBtnText}>+ Category</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => {
-                setEditingProductId(null);
-                setDraft(emptyDraft);
-                setFormOpen(true);
-              }}
-              accessibilityLabel="Add product"
-              accessibilityRole="button"
-            >
-              <Text style={styles.addBtnText}>+ Product</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => {
+              setEditingProductId(null);
+              setDraft(emptyDraft);
+              setFormOpen(true);
+            }}
+            accessibilityLabel="Add product"
+            accessibilityRole="button"
+          >
+            <Ionicons name="add" size={18} color={colors.white} />
+            <Text style={styles.addBtnText}>Product</Text>
+          </TouchableOpacity>
         }
       />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
-        {tabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[styles.segment, activeTab === tab.id && styles.segmentActive]}
-            onPress={() => setActiveTab(tab.id)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === tab.id }}
-          >
-            <Text style={[styles.segmentText, activeTab === tab.id && styles.segmentTextActive]}>{tab.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.segmentsWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.segment, activeTab === tab.id && styles.segmentActive]}
+              onPress={() => setActiveTab(tab.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab.id }}
+            >
+              <Text style={[styles.segmentText, activeTab === tab.id && styles.segmentTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* Category selector on products tab */}
-      {(activeTab === 'products' || activeTab === 'lowStock') && categories.length > 0 && (
+      {(activeTab === 'products' || activeTab === 'lowStock') && (
         <View style={styles.categoryFilterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChips}>
+            <TouchableOpacity
+              style={styles.addCatChip}
+              onPress={() => setCategoryOpen(true)}
+              accessibilityLabel="Add category"
+            >
+              <Ionicons name="add" size={14} color={colors.accent} />
+              <Text style={styles.addCatChipText}>Category</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.catFilterChip, selectedCategory === null && styles.catFilterChipActive]}
               onPress={() => setSelectedCategory(null)}
             >
               <Text style={[styles.catFilterChipText, selectedCategory === null && styles.catFilterChipTextActive]}>
-                All Categories
+                All Categories ({products.length})
               </Text>
             </TouchableOpacity>
             {categories.map((cat) => (
@@ -378,7 +414,7 @@ export default function ProductsScreen() {
                 onPress={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
               >
                 <Text style={[styles.catFilterChipText, selectedCategory === cat.id && styles.catFilterChipTextActive]}>
-                  {cat.name}
+                  {cat.name} ({products.filter((p) => p.category_id === cat.id).length})
                 </Text>
               </TouchableOpacity>
             ))}
@@ -416,33 +452,64 @@ export default function ProductsScreen() {
           }
           renderItem={({ item }) => {
             const cat = categories.find((c) => c.id === item.category_id);
+            const onHand = (quantities[item.id] ?? 0) / 1000;
+            const isLow = item.track_stock && onHand <= item.low_stock_threshold_milli / 1000 && onHand > 0;
+            const isOut = item.track_stock && onHand <= 0;
+            const initial = item.name.charAt(0).toUpperCase();
+
             return (
               <View style={styles.productCard}>
                 <View style={styles.productTop}>
+                  <View style={styles.productAvatarCircle}>
+                    <Text style={styles.productAvatarText}>{initial}</Text>
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.productName}>{item.name}</Text>
                     {cat && <Text style={styles.categoryBadge}>{cat.name}</Text>}
+                    <Text style={styles.productMeta}>
+                      {item.sku ? `SKU: ${item.sku} · ` : ''}
+                      Cost: {moneyText(item.cost_cents)}
+                    </Text>
                   </View>
                   <Text style={styles.productPrice}>{moneyText(item.price_cents)}</Text>
                 </View>
-                <Text style={styles.productMeta}>
-                  {item.sku ? `SKU ${item.sku}  ·  ` : ''}
-                  {item.barcode ? `Barcode ${item.barcode}  ·  ` : ''}
-                  {item.unit}
-                </Text>
-                {item.track_stock ? (
-                  <Text style={styles.productStock}>On hand: {(quantities[item.id] ?? 0) / 1000} {item.unit}</Text>
-                ) : (
-                  <Text style={styles.productMeta}>Stock tracking off</Text>
-                )}
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => editProduct(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${item.name}`}
-                >
-                  <Text style={styles.editButtonText}>Edit product</Text>
-                </TouchableOpacity>
+
+                <View style={styles.productBottomRow}>
+                  <View style={[
+                    styles.stockStatusBadge,
+                    isOut ? styles.stockOutBadge : isLow ? styles.stockLowBadge : styles.stockOkBadge
+                  ]}>
+                    <Text style={[
+                      styles.stockStatusText,
+                      isOut ? styles.stockOutText : isLow ? styles.stockLowText : styles.stockOkText
+                    ]}>
+                      {item.track_stock ? (isOut ? 'Out of Stock' : `${onHand} ${item.unit} on hand`) : 'Tracking Off'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cardActionsRow}>
+                    {item.track_stock && (
+                      <TouchableOpacity
+                        style={styles.cardActionBtn}
+                        onPress={() => openAdjustment(item.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Adjust stock for ${item.name}`}
+                      >
+                        <Ionicons name="swap-vertical" size={14} color={colors.primary} />
+                        <Text style={styles.cardActionBtnText}>Adjust</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.cardActionBtn}
+                      onPress={() => editProduct(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${item.name}`}
+                    >
+                      <Ionicons name="create-outline" size={14} color={colors.primary} />
+                      <Text style={styles.cardActionBtnText}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
             );
           }}
@@ -750,6 +817,32 @@ export default function ProductsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Manager PIN Authorization Modal */}
+      <Modal visible={pinModalVisible} transparent animationType="fade" onRequestClose={() => setPinModalVisible(false)}>
+        <View style={styles.modalShade}>
+          <View style={[styles.modalCard, { paddingBottom: spacing.xxl }]}>
+            <Text style={styles.modalTitle}>Manager Authorization</Text>
+            <Text style={styles.modalHint}>Enter manager PIN to authorize this stock adjustment</Text>
+            <TextInput
+              value={enteredPin}
+              onChangeText={setEnteredPin}
+              placeholder="Enter PIN"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={8}
+              autoFocus
+              style={styles.input}
+              accessibilityLabel="Manager PIN"
+            />
+            <View style={styles.actions}>
+              <Button title="Cancel" variant="outline" onPress={() => setPinModalVisible(false)} style={styles.actionButton} />
+              <Button title="Authorize" onPress={verifyAndProceedAdjustment} style={styles.actionButton} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -798,38 +891,143 @@ function PurchaseCard(props: { purchase: PurchaseRow; onPress: () => void }) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  addBtn: { minHeight: spacing.touchTarget, paddingHorizontal: spacing.md, backgroundColor: colors.accent, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  addBtn: {
+    minHeight: spacing.touchTarget,
+    paddingHorizontal: 14,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    ...shadows.sm,
+  },
   addBtnText: { fontSize: 13, fontWeight: '700', color: colors.white },
-  categoryHeaderBtn: { minHeight: spacing.touchTarget, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.borderDark, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  categoryHeaderBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
-  segments: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  segment: { paddingHorizontal: spacing.lg, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', minHeight: spacing.touchTarget },
-  segmentActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  segmentText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
-  segmentTextActive: { color: colors.white, fontWeight: '600' },
-  categoryFilterRow: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  categoryChips: { gap: spacing.xs },
-  catFilterChip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  catFilterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  segmentsWrapper: {
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  segments: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+  },
+  segment: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: spacing.touchTarget,
+  },
+  segmentActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  segmentText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  segmentTextActive: { color: colors.white, fontWeight: '700' },
+  categoryFilterRow: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  categoryChips: { gap: 8 },
+  addCatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    minHeight: 42,
+  },
+  addCatChipText: { fontSize: 12, fontWeight: '700', color: colors.accent },
+  catFilterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  catFilterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   catFilterChipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  catFilterChipTextActive: { color: colors.white },
+  catFilterChipTextActive: { color: colors.white, fontWeight: '700' },
   catFormChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginRight: spacing.xs },
   catFormChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   catFormChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   catFormChipTextActive: { color: colors.white },
-  searchContainer: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, minHeight: spacing.touchTarget, justifyContent: 'center', paddingHorizontal: spacing.md },
+  searchContainer: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8, minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md },
   searchInput: { fontSize: 14, color: colors.text },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
   emptyList: { flexGrow: 1 },
-  productCard: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: spacing.lg, gap: spacing.xs },
-  productTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
-  productName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  categoryBadge: { fontSize: 11, fontWeight: '600', color: colors.primaryLight, marginTop: 2 },
-  productPrice: { fontSize: 15, fontWeight: '700', color: colors.accent },
-  productMeta: { fontSize: 12, color: colors.textSecondary },
-  productStock: { fontSize: 13, color: colors.primary, fontWeight: '600' },
-  editButton: { alignSelf: 'flex-start', minHeight: spacing.touchTarget, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.borderDark, borderRadius: 8, justifyContent: 'center' },
-  editButtonText: { color: colors.primary, fontWeight: '600' },
+  productCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: spacing.md,
+    gap: spacing.sm,
+    ...shadows.card,
+  },
+  productTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  productAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productAvatarText: { fontSize: 18, fontWeight: '800', color: colors.accent },
+  productName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  categoryBadge: { fontSize: 11, fontWeight: '700', color: colors.accent, marginTop: 1 },
+  productPrice: { fontSize: 16, fontWeight: '800', color: colors.accent },
+  productMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  productBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
+  },
+  stockStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  stockOkBadge: { backgroundColor: colors.successLight },
+  stockLowBadge: { backgroundColor: colors.warningLight },
+  stockOutBadge: { backgroundColor: colors.dangerLight },
+  stockStatusText: { fontSize: 11, fontWeight: '700' },
+  stockOkText: { color: colors.successDark },
+  stockLowText: { color: colors.warningDark },
+  stockOutText: { color: colors.dangerDark },
+  cardActionsRow: { flexDirection: 'row', gap: spacing.xs },
+  cardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  cardActionBtnText: { fontSize: 12, fontWeight: '700', color: colors.primary },
   movementPane: { flex: 1 },
   newAdjustment: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   movementCard: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: spacing.lg, gap: spacing.xs },

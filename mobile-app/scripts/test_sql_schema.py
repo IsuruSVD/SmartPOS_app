@@ -63,6 +63,27 @@ class MigrationSmokeTest(unittest.TestCase):
         self.db.rollback()
         self.assertIsNone(self.db.execute("SELECT id FROM products WHERE id='rollback-product'").fetchone())
 
+    def test_demo_seeder_queries_match_schema(self):
+        cat_id = 'c1'
+        self.db.execute("INSERT INTO categories (id, name, color) VALUES (?, ?, ?)", (cat_id, 'Beverages', '#2563EB'))
+        prod_id = 'p1'
+        self.db.execute(
+            """INSERT INTO products (
+                id, category_id, name, sku, barcode, price_cents, cost_cents, unit,
+                track_stock, low_stock_threshold_milli
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'units', 1, 5000)""",
+            (prod_id, cat_id, 'Dilmah Tea 100B', 'BEV-001', '4791001001015', 85000, 68000)
+        )
+        self.db.execute(
+            """INSERT INTO stock_movements (id, product_id, movement_type, quantity_delta_milli, note)
+               VALUES (?, ?, 'opening_stock', ?, 'Initial Demo Stock Seed')""",
+            ('m1', prod_id, 40000)
+        )
+        prod = self.db.execute("SELECT name, price_cents, cost_cents FROM products WHERE id = ?", (prod_id,)).fetchone()
+        self.assertEqual(prod, ('Dilmah Tea 100B', 85000, 68000))
+        movement = self.db.execute("SELECT quantity_delta_milli FROM stock_movements WHERE id = 'm1'").fetchone()
+        self.assertEqual(movement[0], 40000)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -208,12 +208,58 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSeedDemoProducts = () => {
+    Alert.alert(
+      'Load 50 Test Products?',
+      'This will insert 50 Sri Lankan retail products across 6 departments (Beverages, Snacks, Dairy, Groceries, Bakery, Household) with opening inventory.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load 50 Products',
+          style: 'default',
+          onPress: async () => {
+            try {
+              const res = await db.seedDemoData();
+              await loadSettings();
+              Alert.alert('Demo Catalog Loaded', `Successfully added ${res.productsCount} products across ${res.categoriesCount} departments.`);
+            } catch (e) {
+              Alert.alert('Seed Failed', String(e));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearAllTestData = () => {
+    Alert.alert(
+      'Clear All Database Data?',
+      'Warning: This will permanently wipe all products, categories, inventory ledger, and sales history. Invoice numbering will reset to 1.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All Data',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await db.clearAllTestData();
+              await loadSettings();
+              Alert.alert('Database Cleared', 'All test products, categories, and sales have been reset to a fresh state.');
+            } catch (e) {
+              Alert.alert('Clear Failed', String(e));
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const taxPct = (parseInt(taxRateBps, 10) / 100).toFixed(2);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title="Settings & More"
+        title="Settings"
         subtitle="Configuration & Operations"
       />
 
@@ -232,31 +278,25 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
-        {/* Security & Access Control */}
+        {/* Testing & Demo Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security & Access Control</Text>
+          <Text style={styles.sectionTitle}>Testing & Catalog Tools</Text>
           <Card style={styles.card}>
-            <TouchableOpacity style={styles.row} onPress={openPinModal}>
+            <TouchableOpacity style={styles.row} onPress={handleSeedDemoProducts}>
               <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Manager Security PIN</Text>
-                <Text style={styles.itemSub}>
-                  {managerPin ? 'PIN is active · Authorizes returns & refunds' : 'Not configured · Open kiosk access'}
-                </Text>
+                <Text style={styles.itemTitle}>Load 50 Test Products</Text>
+                <Text style={styles.itemSub}>Seeds 50 retail items across 6 departments with opening stock</Text>
               </View>
-              <Badge label={managerPin ? 'Active' : 'Not Set'} variant={managerPin ? 'success' : 'neutral'} />
+              <Badge label="Load 50" variant="success" />
             </TouchableOpacity>
-            {managerPin ? (
-              <>
-                <View style={styles.divider} />
-                <TouchableOpacity style={styles.row} onPress={toggleRefundPin}>
-                  <View style={styles.infoCol}>
-                    <Text style={styles.itemTitle}>Require PIN for Refunds</Text>
-                    <Text style={styles.itemSub}>Prompts 4-digit PIN before issuing full or partial return</Text>
-                  </View>
-                  <Badge label={requireRefundPin === '1' ? 'Required' : 'Optional'} variant={requireRefundPin === '1' ? 'warning' : 'neutral'} />
-                </TouchableOpacity>
-              </>
-            ) : null}
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.row} onPress={handleClearAllTestData}>
+              <View style={styles.infoCol}>
+                <Text style={[styles.itemTitle, { color: colors.danger }]}>Clear All Database Data</Text>
+                <Text style={styles.itemSub}>Permanently wipes all catalog, inventory, and sales history</Text>
+              </View>
+              <Badge label="Reset All" variant="danger" />
+            </TouchableOpacity>
           </Card>
         </View>
 
@@ -286,31 +326,25 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
-        {/* Security & Access Control */}
+        {/* Testing & Demo Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security & Access Control</Text>
+          <Text style={styles.sectionTitle}>Testing & Catalog Tools</Text>
           <Card style={styles.card}>
-            <TouchableOpacity style={styles.row} onPress={openPinModal}>
+            <TouchableOpacity style={styles.row} onPress={handleSeedDemoProducts}>
               <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Manager Security PIN</Text>
-                <Text style={styles.itemSub}>
-                  {managerPin ? 'PIN is active · Authorizes returns & refunds' : 'Not configured · Open kiosk access'}
-                </Text>
+                <Text style={styles.itemTitle}>Load 50 Test Products</Text>
+                <Text style={styles.itemSub}>Seeds 50 retail items across 6 departments with opening stock</Text>
               </View>
-              <Badge label={managerPin ? 'Active' : 'Not Set'} variant={managerPin ? 'success' : 'neutral'} />
+              <Badge label="Load 50" variant="success" />
             </TouchableOpacity>
-            {managerPin ? (
-              <>
-                <View style={styles.divider} />
-                <TouchableOpacity style={styles.row} onPress={toggleRefundPin}>
-                  <View style={styles.infoCol}>
-                    <Text style={styles.itemTitle}>Require PIN for Refunds</Text>
-                    <Text style={styles.itemSub}>Prompts 4-digit PIN before issuing full or partial return</Text>
-                  </View>
-                  <Badge label={requireRefundPin === '1' ? 'Required' : 'Optional'} variant={requireRefundPin === '1' ? 'warning' : 'neutral'} />
-                </TouchableOpacity>
-              </>
-            ) : null}
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.row} onPress={handleClearAllTestData}>
+              <View style={styles.infoCol}>
+                <Text style={[styles.itemTitle, { color: colors.danger }]}>Clear All Database Data</Text>
+                <Text style={styles.itemSub}>Permanently wipes all catalog, inventory, and sales history</Text>
+              </View>
+              <Badge label="Reset All" variant="danger" />
+            </TouchableOpacity>
           </Card>
         </View>
 
@@ -372,31 +406,25 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
-        {/* Security & Access Control */}
+        {/* Testing & Demo Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security & Access Control</Text>
+          <Text style={styles.sectionTitle}>Testing & Catalog Tools</Text>
           <Card style={styles.card}>
-            <TouchableOpacity style={styles.row} onPress={openPinModal}>
+            <TouchableOpacity style={styles.row} onPress={handleSeedDemoProducts}>
               <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Manager Security PIN</Text>
-                <Text style={styles.itemSub}>
-                  {managerPin ? 'PIN is active · Authorizes returns & refunds' : 'Not configured · Open kiosk access'}
-                </Text>
+                <Text style={styles.itemTitle}>Load 50 Test Products</Text>
+                <Text style={styles.itemSub}>Seeds 50 retail items across 6 departments with opening stock</Text>
               </View>
-              <Badge label={managerPin ? 'Active' : 'Not Set'} variant={managerPin ? 'success' : 'neutral'} />
+              <Badge label="Load 50" variant="success" />
             </TouchableOpacity>
-            {managerPin ? (
-              <>
-                <View style={styles.divider} />
-                <TouchableOpacity style={styles.row} onPress={toggleRefundPin}>
-                  <View style={styles.infoCol}>
-                    <Text style={styles.itemTitle}>Require PIN for Refunds</Text>
-                    <Text style={styles.itemSub}>Prompts 4-digit PIN before issuing full or partial return</Text>
-                  </View>
-                  <Badge label={requireRefundPin === '1' ? 'Required' : 'Optional'} variant={requireRefundPin === '1' ? 'warning' : 'neutral'} />
-                </TouchableOpacity>
-              </>
-            ) : null}
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.row} onPress={handleClearAllTestData}>
+              <View style={styles.infoCol}>
+                <Text style={[styles.itemTitle, { color: colors.danger }]}>Clear All Database Data</Text>
+                <Text style={styles.itemSub}>Permanently wipes all catalog, inventory, and sales history</Text>
+              </View>
+              <Badge label="Reset All" variant="danger" />
+            </TouchableOpacity>
           </Card>
         </View>
 
