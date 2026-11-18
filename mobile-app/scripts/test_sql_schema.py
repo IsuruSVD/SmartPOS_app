@@ -84,6 +84,69 @@ class MigrationSmokeTest(unittest.TestCase):
         movement = self.db.execute("SELECT quantity_delta_milli FROM stock_movements WHERE id = 'm1'").fetchone()
         self.assertEqual(movement[0], 40000)
 
+    def test_backup_restore_clean_wipe_and_reinsertion(self):
+        # 1. Seed initial data
+        self.db.execute("INSERT INTO suppliers (id, name) VALUES ('s1', 'Ceylon Wholesale')")
+        self.db.execute("INSERT INTO categories (id, name) VALUES ('c1', 'Beverages')")
+        self.db.execute("INSERT INTO products (id, category_id, name, price_cents, cost_cents) VALUES ('p1', 'c1', 'Tea', 85000, 68000)")
+        self.db.execute("INSERT INTO stock_movements (id, product_id, movement_type, quantity_delta_milli) VALUES ('m1', 'p1', 'opening', 50000)")
+        self.db.execute("INSERT INTO sales (id, invoice_number, status, total_cents) VALUES ('inv1', 'INV-001', 'completed', 85000)")
+        self.db.execute("INSERT INTO sale_items (id, sale_id, product_id, product_name, quantity_milli, unit_price_cents, line_total_cents) VALUES ('it1', 'inv1', 'p1', 'Tea', 1000, 85000, 85000)")
+        self.db.execute("INSERT INTO payments (id, sale_id, method, amount_cents) VALUES ('pm1', 'inv1', 'cash', 85000)")
+        self.db.execute("INSERT INTO refunds (id, original_sale_id, refund_sale_id, refund_method, total_cents) VALUES ('rf1', 'inv1', 'inv1', 'cash', 0)")
+        self.db.commit()
+
+        # Verify child-to-parent deletion order succeeds with foreign_keys = ON
+        with self.db:
+            self.db.execute("DELETE FROM refunds")
+            self.db.execute("DELETE FROM payments")
+            self.db.execute("DELETE FROM sale_items")
+            self.db.execute("DELETE FROM sales")
+            self.db.execute("DELETE FROM purchase_items")
+            self.db.execute("DELETE FROM purchases")
+            self.db.execute("DELETE FROM stock_movements")
+            self.db.execute("DELETE FROM products")
+            self.db.execute("DELETE FROM categories")
+            self.db.execute("DELETE FROM suppliers")
+            self.db.execute("DELETE FROM settings")
+
+            # Verify parent-to-child re-insertion succeeds
+            self.db.execute("INSERT INTO settings (key, value) VALUES ('currency_code', 'LKR')")
+            self.db.execute("INSERT INTO suppliers (id, name) VALUES ('s_restored', 'New Supplier')")
+            self.db.execute("INSERT INTO categories (id, name) VALUES ('c_restored', 'Dairy')")
+            self.db.execute("INSERT INTO products (id, category_id, name, price_cents, cost_cents) VALUES ('p_restored', 'c_restored', 'Milk', 48000, 41000)")
+            self.db.execute("INSERT INTO stock_movements (id, product_id, movement_type, quantity_delta_milli) VALUES ('m_restored', 'p_restored', 'opening', 25000)")
+            self.db.execute("INSERT INTO sales (id, invoice_number, status, total_cents) VALUES ('sale_restored', 'INV-002', 'completed', 48000)")
+            self.db.execute("INSERT INTO sale_items (id, sale_id, product_id, product_name, quantity_milli, unit_price_cents, line_total_cents) VALUES ('it_restored', 'sale_restored', 'p_restored', 'Milk', 1000, 48000, 48000)")
+            self.db.execute("INSERT INTO payments (id, sale_id, method, amount_cents) VALUES ('pay_restored', 'sale_restored', 'cash', 48000)")
+
+        # Check restored counts
+        prod_count = self.db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        self.assertEqual(prod_count, 1)
+        item_name = self.db.execute("SELECT name FROM products WHERE id='p_restored'").fetchone()[0]
+        self.assertEqual(item_name, 'Milk')
+
+    def test_backup_restore_foreign_key_violation_triggers_rollback(self):
+        # Initial state
+        self.db.execute("INSERT INTO categories (id, name) VALUES ('c_safe', 'Safety Category')")
+        self.db.execute("INSERT INTO products (id, category_id, name, price_cents) VALUES ('p_safe', 'c_safe', 'Safety Item', 100)")
+        self.db.commit()
+        initial_prod_count = self.db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
+        # Simulate a transaction with bad foreign key
+        try:
+            with self.db:
+                self.db.execute("DELETE FROM products")
+                # Try inserting product referencing non-existent category
+                self.db.execute("INSERT INTO products (id, category_id, name, price_cents) VALUES ('p_bad', 'c_non_existent', 'Bad Item', 100)")
+        except sqlite3.IntegrityError:
+            pass
+
+        # Verify rollback preserved initial state
+        prod_count = self.db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        self.assertEqual(prod_count, initial_prod_count)
+        self.assertIsNotNone(self.db.execute("SELECT id FROM products WHERE id='p_safe'").fetchone())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -22,6 +22,8 @@ import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
 import { formatMonospaceReceipt } from '../../src/utils/escpos';
+import { BarcodeScannerModal } from '../../src/ui/components/BarcodeScannerModal';
+import { blePrinter } from '../../src/utils/blePrinter';
 
 const money = (cents: number) => `LKR ${(cents / 100).toFixed(2)}`;
 
@@ -64,6 +66,10 @@ export default function PosScreen() {
   // Thermal preview modal state
   const [thermalPreviewOpen, setThermalPreviewOpen] = useState(false);
   const [thermalText, setThermalText] = useState('');
+
+  // Barcode scanner modal & BLE printer state
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [isPrintingBle, setIsPrintingBle] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -306,6 +312,79 @@ export default function PosScreen() {
     }
   };
 
+  const handleBarcodeScan = (scannedCode: string) => {
+    const code = scannedCode.trim().toLowerCase();
+    const matched = products.find(
+      (p) =>
+        (p.barcode && p.barcode.toLowerCase() === code) ||
+        (p.sku && p.sku.toLowerCase() === code)
+    );
+
+    if (matched) {
+      addToCart(matched.id);
+      return { success: true, name: matched.name, priceCents: matched.price_cents };
+    } else {
+      return { success: false, message: `No catalog item matches barcode/SKU: "${scannedCode}"` };
+    }
+  };
+
+  const handleBlePrint = async () => {
+    if (!completedSale) return;
+    setIsPrintingBle(true);
+    try {
+      const cfgRows = await db.settings.getAll();
+      const cfg = Object.fromEntries(cfgRows.map((s) => [s.key, s.value]));
+
+      // Connect to printer (auto-discover or use paired device)
+      if (!blePrinter.getConnectedPrinter()) {
+        const devices = blePrinter.getDiscoveredDevices();
+        if (devices.length > 0) {
+          await blePrinter.connect(devices[0].id);
+        } else {
+          await blePrinter.startScan(2000);
+          const scanned = blePrinter.getDiscoveredDevices();
+          if (scanned.length > 0) {
+            await blePrinter.connect(scanned[0].id);
+          }
+        }
+      }
+
+      const receiptData = {
+        storeName: cfg.store_name || 'TechknowLK Store',
+        storeAddress: cfg.store_address,
+        storePhone: cfg.store_phone,
+        taxId: cfg.tax_id,
+        invoiceNumber: completedSale.invoice,
+        dateStr: new Date().toLocaleString(),
+        items: completedSale.items.map((i) => ({
+          name: i.name,
+          quantity: i.qty,
+          unitPriceCents: Math.round(i.lineTotal / i.qty),
+          lineTotalCents: i.lineTotal,
+        })),
+        subtotalCents: completedSale.total,
+        taxCents: 0,
+        totalCents: completedSale.total,
+        paidCents: completedSale.paid,
+        changeCents: completedSale.change,
+        paymentMethod: completedSale.paymentSummary,
+        payments: [{ method: paymentMethod, amount_cents: completedSale.paid }],
+        footerNote: cfg.receipt_footer || 'Thank you for shopping with us!',
+      };
+
+      const result = await blePrinter.printReceipt(receiptData, 32);
+      if (result.success) {
+        Alert.alert('Printed Successfully', result.message);
+      } else {
+        Alert.alert('BLE Notice', result.message);
+      }
+    } catch (e) {
+      Alert.alert('Printer Error', e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsPrintingBle(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
@@ -356,6 +435,13 @@ export default function PosScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+        <TouchableOpacity
+          style={styles.scannerBtn}
+          onPress={() => setScannerOpen(true)}
+          accessibilityLabel="Open Barcode Scanner"
+        >
+          <Ionicons name="barcode-outline" size={22} color={colors.accent} />
+        </TouchableOpacity>
       </View>
 
       {/* Category Filter Carousel */}
@@ -743,6 +829,16 @@ export default function PosScreen() {
                 <Ionicons name="share-social-outline" size={18} color={colors.white} style={{ marginRight: 6 }} />
                 <Text style={styles.shareReceiptText}>Share Digital Receipt</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.shareReceiptBtn, { backgroundColor: colors.accent, marginTop: spacing.xs }]}
+                onPress={handleBlePrint}
+                disabled={isPrintingBle}
+              >
+                <Ionicons name="bluetooth" size={18} color={colors.white} style={{ marginRight: 6 }} />
+                <Text style={styles.shareReceiptText}>
+                  {isPrintingBle ? 'Printing…' : 'Print via Bluetooth (BLE)'}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.previewThermalBtn} onPress={previewThermal}>
                 <Ionicons name="print-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
                 <Text style={styles.previewThermalText}>Thermal Preview</Text>
@@ -771,14 +867,35 @@ export default function PosScreen() {
             <ScrollView style={styles.thermalPaper}>
               <Text style={styles.thermalText}>{thermalText}</Text>
             </ScrollView>
-            <Button
-              title="Close Preview"
-              onPress={() => setThermalPreviewOpen(false)}
-              style={{ marginTop: spacing.md }}
-            />
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+              <Button
+                title={isPrintingBle ? 'Printing…' : 'Print (BLE)'}
+                onPress={handleBlePrint}
+                disabled={isPrintingBle}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Close"
+                variant="outline"
+                onPress={() => setThermalPreviewOpen(false)}
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
         </View>
       </Modal>
+
+      {/* Camera-based Barcode Scanner Modal with Continuous Rapid-Scan Mode */}
+      <BarcodeScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleBarcodeScan}
+        sampleBarcodes={products
+          .filter((p) => Boolean(p.barcode))
+          .map((p) => ({ name: p.name, barcode: p.barcode!, priceCents: p.price_cents }))}
+        cartCount={itemCount}
+        cartTotalCents={finalTotalCents}
+      />
     </SafeAreaView>
   );
 }
@@ -803,11 +920,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -816,6 +937,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: spacing.md,
     height: 44,
+    ...shadows.sm,
+  },
+  scannerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadows.sm,
   },
   searchIcon: { marginRight: spacing.sm },

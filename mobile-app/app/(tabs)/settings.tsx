@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
   Share,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useDb } from '../_layout';
@@ -18,7 +19,9 @@ import { Header } from '../../src/ui/components/Header';
 import { Card } from '../../src/ui/components/Card';
 import { Badge } from '../../src/ui/components/Badge';
 import { Button } from '../../src/ui/components/Button';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReportSummary } from '../../src/db/services/ReportingService';
+import type { BackupValidationResult } from '../../src/db/services/BackupRestoreService';
 
 const money = (cents: number) => `LKR ${(cents / 100).toFixed(2)}`;
 
@@ -41,6 +44,12 @@ export default function SettingsScreen() {
   const [reportsModalVisible, setReportsModalVisible] = useState(false);
   const [taxModalVisible, setTaxModalVisible] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+
+  // Disaster Recovery / Backup Restore
+  const [restoreJsonInput, setRestoreJsonInput] = useState('');
+  const [restoreValidation, setRestoreValidation] = useState<BackupValidationResult | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Form states
   const [editStoreName, setEditStoreName] = useState('');
@@ -206,6 +215,82 @@ export default function SettingsScreen() {
     } catch (e) {
       Alert.alert('Export Error', e instanceof Error ? e.message : 'Failed to export backup');
     }
+  };
+
+  const handleValidateBackup = () => {
+    const trimmed = restoreJsonInput.trim();
+    if (!trimmed) {
+      Alert.alert('Empty Input', 'Please paste JSON backup contents to validate.');
+      return;
+    }
+    const val = db.validateBackupJson(trimmed);
+    setRestoreValidation(val);
+    if (val.valid) {
+      Alert.alert(
+        'Backup Validated ✓',
+        `Version: ${val.version}\n` +
+        `Products: ${val.counts?.products}\n` +
+        `Categories: ${val.counts?.categories}\n` +
+        `Sales: ${val.counts?.sales}\n` +
+        `Stock Movements: ${val.counts?.stock_movements}\n\n` +
+        `Schema and foreign-key integrity confirmed.`
+      );
+    } else {
+      Alert.alert('Validation Error ✗', val.error || 'Failed schema validation.');
+    }
+  };
+
+  const handleLoadCurrentBackupPreview = async () => {
+    try {
+      const json = await db.exportBackupJson();
+      setRestoreJsonInput(json);
+      const val = db.validateBackupJson(json);
+      setRestoreValidation(val);
+    } catch (e) {
+      Alert.alert('Preview Error', e instanceof Error ? e.message : 'Failed to generate backup preview.');
+    }
+  };
+
+  const executeRestore = async () => {
+    if (!restoreValidation?.valid) {
+      Alert.alert('Validation Required', 'Please validate the backup schema first.');
+      return;
+    }
+
+    Alert.alert(
+      '⚠️ Overwrite Local Database?',
+      `Restoring will replace all current database records with the backup (${restoreValidation.counts?.products} products, ${restoreValidation.counts?.sales} sales).\n\nAre you sure you want to proceed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore Now',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRestoring(true);
+            try {
+              const res = await db.restoreBackupJson(restoreJsonInput);
+              await loadSettings();
+              setIsRestoring(false);
+              setRestoreModalVisible(false);
+              setRestoreJsonInput('');
+              setRestoreValidation(null);
+              Alert.alert(
+                'Restore Complete ✓',
+                `Successfully restored database!\n\n` +
+                `• Products: ${res.counts.products}\n` +
+                `• Categories: ${res.counts.categories}\n` +
+                `• Sales History: ${res.counts.sales}\n` +
+                `• Stock Movements: ${res.counts.stockMovements}\n` +
+                `• Payments: ${res.counts.payments}`
+              );
+            } catch (err) {
+              setIsRestoring(false);
+              Alert.alert('Restore Failed', err instanceof Error ? err.message : String(err));
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSeedDemoProducts = () => {
@@ -402,6 +487,14 @@ export default function SettingsScreen() {
                 <Text style={styles.itemSub}>Export complete catalog, sales & stock as JSON</Text>
               </View>
               <Badge label="Export" variant="neutral" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.row} onPress={() => setRestoreModalVisible(true)}>
+              <View style={styles.infoCol}>
+                <Text style={styles.itemTitle}>Disaster Recovery & Restore</Text>
+                <Text style={styles.itemSub}>Validate schema, foreign keys & restore database from JSON</Text>
+              </View>
+              <Badge label="Restore" variant="neutral" />
             </TouchableOpacity>
           </Card>
         </View>
@@ -635,6 +728,117 @@ export default function SettingsScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Disaster Recovery / Restore Modal */}
+      <Modal visible={restoreModalVisible} animationType="slide" transparent onRequestClose={() => setRestoreModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '92%', width: '92%', maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} />
+                <Text style={styles.modalTitle}>Database Disaster Recovery</Text>
+              </View>
+              <TouchableOpacity onPress={() => setRestoreModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.md }}>
+              <View style={styles.warningBox}>
+                <Ionicons name="warning-outline" size={18} color="#D97706" />
+                <Text style={styles.warningBoxText}>
+                  Restoring replaces current local database records with the imported snapshot. Operations are wrapped in an atomic SQLite transaction.
+                </Text>
+              </View>
+
+              <Text style={styles.inputLabel}>Backup JSON Payload</Text>
+              <TextInput
+                style={styles.restoreTextArea}
+                multiline
+                numberOfLines={8}
+                value={restoreJsonInput}
+                onChangeText={(text) => {
+                  setRestoreJsonInput(text);
+                  setRestoreValidation(null);
+                }}
+                placeholder="Paste backup JSON string here..."
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <View style={{ flexDirection: 'row', gap: spacing.xs, marginVertical: spacing.sm }}>
+                <Button
+                  title="Validate Schema"
+                  variant="outline"
+                  onPress={handleValidateBackup}
+                  disabled={!restoreJsonInput.trim() || isRestoring}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Load Preview"
+                  variant="outline"
+                  onPress={handleLoadCurrentBackupPreview}
+                  disabled={isRestoring}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Clear"
+                  variant="outline"
+                  onPress={() => {
+                    setRestoreJsonInput('');
+                    setRestoreValidation(null);
+                  }}
+                  disabled={!restoreJsonInput || isRestoring}
+                />
+              </View>
+
+              {/* Validation Status Indicator */}
+              {restoreValidation && (
+                <View style={[styles.validationCard, restoreValidation.valid ? styles.validationCardSuccess : styles.validationCardError]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Ionicons
+                      name={restoreValidation.valid ? 'checkmark-circle' : 'alert-circle'}
+                      size={18}
+                      color={restoreValidation.valid ? colors.success : colors.danger}
+                    />
+                    <Text style={[styles.validationTitle, { color: restoreValidation.valid ? colors.success : colors.danger }]}>
+                      {restoreValidation.valid ? 'Schema & Foreign Keys Validated' : 'Validation Failed'}
+                    </Text>
+                  </View>
+
+                  {restoreValidation.valid ? (
+                    <View style={styles.statsGrid}>
+                      <Text style={styles.statLine}>• Format Version: <Text style={{ fontWeight: '700' }}>{restoreValidation.version}</Text></Text>
+                      <Text style={styles.statLine}>• Products: <Text style={{ fontWeight: '700' }}>{restoreValidation.counts?.products}</Text></Text>
+                      <Text style={styles.statLine}>• Categories: <Text style={{ fontWeight: '700' }}>{restoreValidation.counts?.categories}</Text></Text>
+                      <Text style={styles.statLine}>• Sales Records: <Text style={{ fontWeight: '700' }}>{restoreValidation.counts?.sales}</Text></Text>
+                      <Text style={styles.statLine}>• Stock Ledger: <Text style={{ fontWeight: '700' }}>{restoreValidation.counts?.stock_movements}</Text></Text>
+                      <Text style={styles.statLine}>• Payments: <Text style={{ fontWeight: '700' }}>{restoreValidation.counts?.payments}</Text></Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.statErrorText}>{restoreValidation.error}</Text>
+                  )}
+                </View>
+              )}
+
+              <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                <Button
+                  title={isRestoring ? 'Restoring Database…' : 'Execute Restore (Atomic Transaction)'}
+                  onPress={executeRestore}
+                  disabled={!restoreValidation?.valid || isRestoring}
+                />
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setRestoreModalVisible(false)}
+                  disabled={isRestoring}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -712,6 +916,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: spacing.lg,
     maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   modalTitle: {
     fontSize: 18,
@@ -823,5 +1033,67 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.3)',
+    borderRadius: 10,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  warningBoxText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  restoreTextArea: {
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: spacing.md,
+    color: colors.text,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    height: 120,
+    textAlignVertical: 'top',
+  },
+  validationCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  validationCardSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  validationCardError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  validationTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statsGrid: {
+    gap: 2,
+    marginTop: 4,
+  },
+  statLine: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  statErrorText: {
+    fontSize: 12,
+    color: colors.danger,
+    marginTop: 2,
+    fontWeight: '500',
   },
 });

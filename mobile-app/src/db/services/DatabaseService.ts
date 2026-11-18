@@ -34,6 +34,7 @@ import type { ReportSummary } from './ReportingService';
  *   const products = await db.products.findAll();
  */
 import { seedDemoData, clearAllTestData, type DemoSeedResult } from './DemoDataSeeder';
+import { BackupRestoreService, type BackupValidationResult, type BackupRestoreResult } from './BackupRestoreService';
 
 export class DatabaseService {
   private static _initPromise: Promise<DatabaseService> | null = null;
@@ -192,6 +193,16 @@ export class DatabaseService {
 
   async exportBackupJson(): Promise<string> {
     return this.reports.exportDatabaseJson();
+  }
+
+  validateBackupJson(rawJson: string): BackupValidationResult {
+    return new BackupRestoreService(this.db).validateBackup(rawJson);
+  }
+
+  async restoreBackupJson(rawJson: string): Promise<BackupRestoreResult> {
+    const result = await new BackupRestoreService(this.db).restoreBackup(rawJson);
+    this.stock.clearCache();
+    return result;
   }
 
   async seedDemoData(): Promise<DemoSeedResult> {

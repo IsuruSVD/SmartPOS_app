@@ -201,7 +201,7 @@ export class ReportingService {
   }
 
   async exportDatabaseJson(): Promise<string> {
-    const [settings, categories, products, stockMovements, sales, saleItems, payments, suppliers, purchases, refunds] = await Promise.all([
+    const [settings, categories, products, stockMovements, sales, saleItems, payments, suppliers, purchases, purchaseItems, refunds] = await Promise.all([
       this.db.getAllAsync('SELECT * FROM settings'),
       this.db.getAllAsync('SELECT * FROM categories'),
       this.db.getAllAsync('SELECT * FROM products WHERE deleted_at IS NULL'),
@@ -211,6 +211,7 @@ export class ReportingService {
       this.db.getAllAsync('SELECT * FROM payments ORDER BY created_at ASC'),
       this.db.getAllAsync('SELECT * FROM suppliers WHERE deleted_at IS NULL'),
       this.db.getAllAsync('SELECT * FROM purchases ORDER BY created_at ASC'),
+      this.db.getAllAsync('SELECT * FROM purchase_items ORDER BY created_at ASC'),
       this.db.getAllAsync('SELECT * FROM refunds ORDER BY created_at ASC'),
     ]);
 
@@ -227,6 +228,7 @@ export class ReportingService {
         payments,
         suppliers,
         purchases,
+        purchase_items: purchaseItems,
         refunds,
       },
     };
