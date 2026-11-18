@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "SmartPOS",
+    "slug": "smart-pos",
+    "version": "1.0.0",
+    "scheme": "smartpos",
+    "platforms": ["android", "ios", "web"],
+    "plugins": [
+      [
+        "expo-router",
+        { "root": "app" }
+      ],
+      [
+        "expo-sqlite"
+      ]
+    ]
+  }
+}
+
