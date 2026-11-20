@@ -20,6 +20,8 @@ import type { Category, Product, StockMovement } from '../../src/db/types';
 import type { Supplier } from '../../src/db/repositories/SupplierRepository';
 import type { Purchase } from '../../src/db/repositories/PurchaseRepository';
 import { colors, spacing, shadows } from '../../src/ui/theme';
+import { useTheme } from '../../src/ui/ThemeContext';
+import { useLanguage } from '../../src/i18n/LanguageContext';
 import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
@@ -27,6 +29,8 @@ import { Button } from '../../src/ui/components/Button';
 type InventoryTab = 'products' | 'movements' | 'lowStock' | 'suppliers';
 type Draft = {
   name: string;
+  name_en: string;
+  name_si: string;
   category_id: string;
   sku: string;
   barcode: string;
@@ -40,6 +44,8 @@ type PurchaseDraftLine = { product_id: string; quantity: string; unit_cost: stri
 
 const emptyDraft: Draft = {
   name: '',
+  name_en: '',
+  name_si: '',
   category_id: '',
   sku: '',
   barcode: '',
@@ -62,6 +68,8 @@ const movementTitle = (type: string) =>
 
 export default function ProductsScreen() {
   const db = useDb();
+  const { colors } = useTheme();
+  const { language, t, getProductName } = useLanguage();
   const [activeTab, setActiveTab] = useState<InventoryTab>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -133,7 +141,7 @@ export default function ProductsScreen() {
       if (activeTab === 'lowStock' && (!p.track_stock || (quantities[p.id] ?? 0) > p.low_stock_threshold_milli)) return false;
       if (selectedCategory && p.category_id !== selectedCategory) return false;
       if (!q) return true;
-      return [p.name, p.sku, p.barcode].some((v) => v?.toLocaleLowerCase().includes(q));
+      return [p.name, p.name_en, p.name_si, p.sku, p.barcode].some((v) => v?.toLocaleLowerCase().includes(q));
     });
   }, [products, quantities, search, activeTab, selectedCategory]);
 
@@ -145,18 +153,22 @@ export default function ProductsScreen() {
   }, [movements, search]);
 
   const saveProduct = async () => {
-    const name = draft.name.trim();
+    const nameEn = draft.name_en.trim();
+    const nameSi = draft.name_si.trim();
+    const primaryName = nameEn || nameSi || draft.name.trim();
     const validMoney = /^\d+(\.\d{1,2})?$/.test(draft.price) && /^\d+(\.\d{1,2})?$/.test(draft.cost);
     const validStock = /^\d+(\.\d{1,3})?$/.test(draft.stock);
-    if (!name || !validMoney || (!editingProductId && !validStock) || Number(draft.price) <= 0) {
-      Alert.alert('Check product details', 'Enter a name, a price greater than zero, a valid cost, and stock quantity with up to 3 decimal places.');
+    if (!primaryName || !validMoney || (!editingProductId && !validStock) || Number(draft.price) <= 0) {
+      Alert.alert('Check product details', 'Enter at least one name (English or Sinhala), a price greater than zero, a valid cost, and stock quantity with up to 3 decimal places.');
       return;
     }
     setSaving(true);
     try {
       if (editingProductId) {
         await db.products.update(editingProductId, {
-          name,
+          name: primaryName,
+          name_en: nameEn || null,
+          name_si: nameSi || null,
           category_id: draft.category_id || null,
           sku: draft.sku.trim() || null,
           barcode: draft.barcode.trim() || null,
@@ -165,7 +177,9 @@ export default function ProductsScreen() {
         });
       } else {
         await db.createProduct({
-          name,
+          name: primaryName,
+          name_en: nameEn || null,
+          name_si: nameSi || null,
           category_id: draft.category_id || null,
           sku: draft.sku,
           barcode: draft.barcode,
@@ -189,6 +203,8 @@ export default function ProductsScreen() {
     setEditingProductId(product.id);
     setDraft({
       name: product.name,
+      name_en: product.name_en ?? '',
+      name_si: product.name_si ?? '',
       category_id: product.category_id ?? '',
       sku: product.sku ?? '',
       barcode: product.barcode ?? '',
@@ -455,7 +471,9 @@ export default function ProductsScreen() {
             const onHand = (quantities[item.id] ?? 0) / 1000;
             const isLow = item.track_stock && onHand <= item.low_stock_threshold_milli / 1000 && onHand > 0;
             const isOut = item.track_stock && onHand <= 0;
-            const initial = item.name.charAt(0).toUpperCase();
+            const displayName = getProductName(item, language);
+            const altName = language === 'si' ? item.name_en : item.name_si;
+            const initial = displayName.charAt(0).toUpperCase();
 
             return (
               <View style={styles.productCard}>
@@ -464,7 +482,10 @@ export default function ProductsScreen() {
                     <Text style={styles.productAvatarText}>{initial}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.productName}>{item.name}</Text>
+                    <Text style={styles.productName}>{displayName}</Text>
+                    {Boolean(altName && altName !== displayName) && (
+                      <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 1 }}>{altName}</Text>
+                    )}
                     {cat && <Text style={styles.categoryBadge}>{cat.name}</Text>}
                     <Text style={styles.productMeta}>
                       {item.sku ? `SKU: ${item.sku} · ` : ''}
@@ -603,7 +624,18 @@ export default function ProductsScreen() {
               {editingProductId ? 'Update the product details. Use Movements to change stock.' : 'Price and cost are entered in LKR. Opening stock is optional.'}
             </Text>
             <ScrollView keyboardShouldPersistTaps="handled">
-              <Field label="Product name" value={draft.name} onChangeText={(name) => setDraft({ ...draft, name })} placeholder="e.g. Tea 100 g" />
+              <Field
+                label="Product Name (English)"
+                value={draft.name_en}
+                onChangeText={(name_en) => setDraft({ ...draft, name_en, name: name_en || draft.name_si })}
+                placeholder="e.g. Rice, Sugar, Milk Powder"
+              />
+              <Field
+                label="Product Name (Sinhala) / නිෂ්පාදන නම"
+                value={draft.name_si}
+                onChangeText={(name_si) => setDraft({ ...draft, name_si, name: draft.name_en || name_si })}
+                placeholder="උදා: සහල්, සීනි, කිරිපිටි"
+              />
 
               {/* Category Picker in Product Form */}
               {categories.length > 0 && (

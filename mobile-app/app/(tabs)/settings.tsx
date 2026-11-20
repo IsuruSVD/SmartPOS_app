@@ -15,6 +15,8 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { useDb } from '../_layout';
 import { colors, spacing } from '../../src/ui/theme';
+import { useTheme } from '../../src/ui/ThemeContext';
+import { useLanguage } from '../../src/i18n/LanguageContext';
 import { Header } from '../../src/ui/components/Header';
 import { Card } from '../../src/ui/components/Card';
 import { Badge } from '../../src/ui/components/Badge';
@@ -27,6 +29,8 @@ const money = (cents: number) => `LKR ${(cents / 100).toFixed(2)}`;
 
 export default function SettingsScreen() {
   const db = useDb();
+  const { colors, themePreference, setThemePreference, isDark } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
 
   // Settings state
   const [storeName, setStoreName] = useState('TechknowLK Store');
@@ -342,46 +346,152 @@ export default function SettingsScreen() {
   const taxPct = (parseInt(taxRateBps, 10) / 100).toFixed(2);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <Header
-        title="Settings"
+        title={t('settings_title')}
         subtitle="Configuration & Operations"
       />
 
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
         {/* Reports & Auditing */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Analytics & Auditing</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Analytics & Auditing</Text>
           <Card style={styles.card}>
             <TouchableOpacity style={styles.row} onPress={openReportsModal}>
               <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Daily Reports & Z-Report</Text>
-                <Text style={styles.itemSub}>View profit, sales breakdown, and share daily audit</Text>
+                <Text style={[styles.itemTitle, { color: colors.text }]}>Daily Reports & Z-Report</Text>
+                <Text style={[styles.itemSub, { color: colors.textSecondary }]}>View profit, sales breakdown, and share daily audit</Text>
               </View>
               <Badge label="Active" variant="success" />
             </TouchableOpacity>
           </Card>
         </View>
 
-        {/* Testing & Demo Tools */}
+        {/* Dynamic Light/Dark Theme */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Testing & Catalog Tools</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('theme')}</Text>
           <Card style={styles.card}>
-            <TouchableOpacity style={styles.row} onPress={handleSeedDemoProducts}>
-              <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Load 50 Test Products</Text>
-                <Text style={styles.itemSub}>Seeds 50 retail items across 6 departments with opening stock</Text>
-              </View>
-              <Badge label="Load 50" variant="success" />
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity style={styles.row} onPress={handleClearAllTestData}>
-              <View style={styles.infoCol}>
-                <Text style={[styles.itemTitle, { color: colors.danger }]}>Clear All Database Data</Text>
-                <Text style={styles.itemSub}>Permanently wipes all catalog, inventory, and sales history</Text>
-              </View>
-              <Badge label="Reset All" variant="danger" />
-            </TouchableOpacity>
+            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{t('theme_sub')}</Text>
+            <View style={styles.segmentedRow}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
+                  themePreference === 'system' && { backgroundColor: colors.accent, borderColor: colors.accent }
+                ]}
+                onPress={() => setThemePreference('system')}
+              >
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={16}
+                  color={themePreference === 'system' ? colors.white : colors.text}
+                />
+                <Text style={[
+                  styles.segmentText,
+                  { color: colors.text },
+                  themePreference === 'system' && { color: colors.white, fontWeight: '700' }
+                ]}>
+                  {t('theme_system')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
+                  themePreference === 'light' && { backgroundColor: colors.accent, borderColor: colors.accent }
+                ]}
+                onPress={() => setThemePreference('light')}
+              >
+                <Ionicons
+                  name="sunny-outline"
+                  size={16}
+                  color={themePreference === 'light' ? colors.white : colors.text}
+                />
+                <Text style={[
+                  styles.segmentText,
+                  { color: colors.text },
+                  themePreference === 'light' && { color: colors.white, fontWeight: '700' }
+                ]}>
+                  {t('theme_light')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
+                  themePreference === 'dark' && { backgroundColor: colors.accent, borderColor: colors.accent }
+                ]}
+                onPress={() => setThemePreference('dark')}
+              >
+                <Ionicons
+                  name="moon-outline"
+                  size={16}
+                  color={themePreference === 'dark' ? colors.white : colors.text}
+                />
+                <Text style={[
+                  styles.segmentText,
+                  { color: colors.text },
+                  themePreference === 'dark' && { color: colors.white, fontWeight: '700' }
+                ]}>
+                  {t('theme_dark')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        </View>
+
+        {/* Application Language (English & Sinhala) */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('language')}</Text>
+          <Card style={styles.card}>
+            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{t('language_sub')}</Text>
+            <View style={styles.segmentedRow}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
+                  language === 'en' && { backgroundColor: colors.accent, borderColor: colors.accent }
+                ]}
+                onPress={() => setLanguage('en')}
+              >
+                <Ionicons
+                  name="globe-outline"
+                  size={16}
+                  color={language === 'en' ? colors.white : colors.text}
+                />
+                <Text style={[
+                  styles.segmentText,
+                  { color: colors.text },
+                  language === 'en' && { color: colors.white, fontWeight: '700' }
+                ]}>
+                  {t('lang_en')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentBtn,
+                  { backgroundColor: colors.surfaceSubtle, borderColor: colors.border },
+                  language === 'si' && { backgroundColor: colors.accent, borderColor: colors.accent }
+                ]}
+                onPress={() => setLanguage('si')}
+              >
+                <Ionicons
+                  name="language-outline"
+                  size={16}
+                  color={language === 'si' ? colors.white : colors.text}
+                />
+                <Text style={[
+                  styles.segmentText,
+                  { color: colors.text },
+                  language === 'si' && { color: colors.white, fontWeight: '700' }
+                ]}>
+                  {t('lang_si')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </Card>
         </View>
 
@@ -411,25 +521,31 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
-        {/* Testing & Demo Tools */}
+        {/* Security & Access Control */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Testing & Catalog Tools</Text>
+          <Text style={styles.sectionTitle}>Security & Access Control</Text>
           <Card style={styles.card}>
-            <TouchableOpacity style={styles.row} onPress={handleSeedDemoProducts}>
+            <TouchableOpacity style={styles.row} onPress={openPinModal}>
               <View style={styles.infoCol}>
-                <Text style={styles.itemTitle}>Load 50 Test Products</Text>
-                <Text style={styles.itemSub}>Seeds 50 retail items across 6 departments with opening stock</Text>
+                <Text style={styles.itemTitle}>Manager Security PIN</Text>
+                <Text style={styles.itemSub}>
+                  {managerPin ? '•••• (PIN Configured)' : 'Disabled (Open Access)'}
+                </Text>
               </View>
-              <Badge label="Load 50" variant="success" />
+              <Badge label={managerPin ? 'Enabled' : 'Disabled'} variant={managerPin ? 'success' : 'neutral'} />
             </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity style={styles.row} onPress={handleClearAllTestData}>
-              <View style={styles.infoCol}>
-                <Text style={[styles.itemTitle, { color: colors.danger }]}>Clear All Database Data</Text>
-                <Text style={styles.itemSub}>Permanently wipes all catalog, inventory, and sales history</Text>
-              </View>
-              <Badge label="Reset All" variant="danger" />
-            </TouchableOpacity>
+            {managerPin ? (
+              <>
+                <View style={styles.divider} />
+                <TouchableOpacity style={styles.row} onPress={toggleRefundPin}>
+                  <View style={styles.infoCol}>
+                    <Text style={styles.itemTitle}>Require PIN for Refunds</Text>
+                    <Text style={styles.itemSub}>Prompt for Manager PIN on full/partial returns</Text>
+                  </View>
+                  <Badge label={requireRefundPin === '1' ? 'Active' : 'Off'} variant={requireRefundPin === '1' ? 'success' : 'neutral'} />
+                </TouchableOpacity>
+              </>
+            ) : null}
           </Card>
         </View>
 
@@ -1095,5 +1211,29 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: 2,
     fontWeight: '500',
+  },
+  settingSubtitle: {
+    fontSize: 12,
+    marginBottom: spacing.sm,
+  },
+  segmentedRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 2,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  segmentText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

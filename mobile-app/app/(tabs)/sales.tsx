@@ -19,6 +19,8 @@ import { useDb } from '../_layout';
 import type { Payment, PaymentMethod, Sale, SaleItem } from '../../src/db/types';
 import type { Refund } from '../../src/db/repositories/RefundRepository';
 import { colors, spacing, shadows } from '../../src/ui/theme';
+import { useTheme } from '../../src/ui/ThemeContext';
+import { useLanguage } from '../../src/i18n/LanguageContext';
 import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
@@ -37,6 +39,8 @@ const statusLabel: Record<string, string> = {
 
 export default function SalesScreen() {
   const db = useDb();
+  const { colors, isDark } = useTheme();
+  const { t, language } = useLanguage();
   const [history, setHistory] = useState<SaleHistoryRow[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -303,18 +307,18 @@ export default function SalesScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title="Sales History" subtitle="Receipts & Invoices" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <Header title={t('sales_history')} subtitle="Receipts & Invoices" />
 
       <View style={styles.searchRow}>
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search invoice number..."
             placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             accessibilityLabel="Search invoice number"
           />
           {search ? (
@@ -329,12 +333,12 @@ export default function SalesScreen() {
         {filters.map((item) => (
           <TouchableOpacity
             key={item.id}
-            style={[styles.filterChip, filter === item.id && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.border }, filter === item.id && { backgroundColor: colors.primary, borderColor: colors.primary }]}
             onPress={() => setFilter(item.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === item.id }}
           >
-            <Text style={[styles.filterText, filter === item.id && styles.filterTextActive]}>{item.label}</Text>
+            <Text style={[styles.filterText, { color: colors.textSecondary }, filter === item.id && { color: colors.white }]}>{item.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -357,14 +361,14 @@ export default function SalesScreen() {
           return (
             <TouchableOpacity
               activeOpacity={0.7}
-              style={styles.saleCard}
+              style={[styles.saleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               onPress={() => openSale(item)}
               accessibilityRole="button"
               accessibilityLabel={`Open invoice ${item.invoice_number}`}
             >
               <View style={styles.saleTop}>
                 <View style={styles.invoiceBadgeRow}>
-                  <View style={styles.saleIconBubble}>
+                  <View style={[styles.saleIconBubble, { backgroundColor: colors.backgroundSecondary }]}>
                     <Ionicons
                       name={item.payment_methods.toLowerCase().includes('card') ? 'card-outline' : 'cash-outline'}
                       size={18}
@@ -372,7 +376,7 @@ export default function SalesScreen() {
                     />
                   </View>
                   <View style={styles.saleTitleGroup}>
-                    <Text style={styles.invoice}>{item.invoice_number}</Text>
+                    <Text style={[styles.invoice, { color: colors.text }]}>{item.invoice_number}</Text>
                     <Text style={styles.saleDate}>
                       {new Date(item.completed_at ?? item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </Text>
@@ -407,10 +411,10 @@ export default function SalesScreen() {
       {/* Sale Detail / Receipt Modal */}
       <Modal visible={detailOpen} animationType="slide" transparent onRequestClose={() => setDetailOpen(false)}>
         <View style={styles.modalShade}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.modalHeaderRow}>
               <View>
-                <Text style={styles.modalTitle}>Receipt {selectedSale?.invoice_number}</Text>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Receipt {selectedSale?.invoice_number}</Text>
                 {selectedSale && (
                   <Text style={styles.saleDate}>
                     {new Date(selectedSale.completed_at ?? selectedSale.created_at).toLocaleString()} · {statusLabel[selectedSale.status] ?? selectedSale.status}
@@ -424,9 +428,9 @@ export default function SalesScreen() {
 
             <ScrollView style={styles.itemList}>
               {saleItems.map((item) => (
-                <View key={item.id} style={styles.itemRow}>
+                <View key={item.id} style={[styles.itemRow, { borderBottomColor: colors.border }]}>
                   <View style={styles.itemDescription}>
-                    <Text style={styles.itemName}>{item.product_name}</Text>
+                    <Text style={[styles.itemName, { color: colors.text }]}>{item.product_name}</Text>
                     <Text style={styles.saleDate}>{item.quantity_milli / 1000} × {money(item.unit_price_cents)}</Text>
                   </View>
                   <Text style={styles.itemTotal}>{money(item.line_total_cents)}</Text>

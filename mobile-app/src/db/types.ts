@@ -56,6 +56,8 @@ export interface Product {
   id: string;
   category_id: string | null;
   name: string;
+  name_en?: string | null;
+  name_si?: string | null;
   sku: string | null;
   barcode: string | null;
   description: string | null;

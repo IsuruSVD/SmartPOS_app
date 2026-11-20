@@ -324,14 +324,16 @@ export class BackupRestoreService {
       for (const prod of products) {
         await txn.runAsync(
           `INSERT INTO products (
-            id, category_id, name, sku, barcode, description, unit,
+            id, category_id, name, name_en, name_si, sku, barcode, description, unit,
             price_cents, cost_cents, image_uri, track_stock, low_stock_threshold_milli,
             version, deleted_at, created_at, updated_at, sync_status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             prod.id,
             prod.category_id ?? null,
             prod.name,
+            prod.name_en ?? prod.name ?? null,
+            prod.name_si ?? null,
             prod.sku ?? null,
             prod.barcode ?? null,
             prod.description ?? null,

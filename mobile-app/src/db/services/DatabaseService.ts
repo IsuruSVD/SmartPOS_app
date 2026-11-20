@@ -102,17 +102,53 @@ export class DatabaseService {
     return DatabaseService._initPromise;
   }
 
-  /** Create a catalog item and opening stock atomically. */
-  async createProduct(input: { name: string; category_id?: string | null; sku?: string | null; barcode?: string | null; price_cents: number; cost_cents: number; opening_quantity_milli: number }): Promise<string> {
+  /** Create a catalog item and opening stock atomically with bilingual support. */
+  async createProduct(input: {
+    name?: string;
+    name_en?: string | null;
+    name_si?: string | null;
+    category_id?: string | null;
+    sku?: string | null;
+    barcode?: string | null;
+    price_cents: number;
+    cost_cents: number;
+    opening_quantity_milli: number;
+  }): Promise<string> {
     const id = newId();
+    const primaryName = input.name?.trim() || input.name_en?.trim() || input.name_si?.trim() || 'Product';
     await runTransaction(this.db, async (tx) => {
-      await tx.runAsync(`INSERT INTO products (id,category_id,name,sku,barcode,price_cents,cost_cents,track_stock,low_stock_threshold_milli) VALUES (?,?,?,?,?,?,?,1,5000)`, [id, input.category_id ?? null, input.name.trim(), input.sku?.trim() || null, input.barcode?.trim() || null, input.price_cents, input.cost_cents]);
+      await tx.runAsync(
+        `INSERT INTO products (
+          id, category_id, name, name_en, name_si, sku, barcode,
+          price_cents, cost_cents, track_stock, low_stock_threshold_milli
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 5000)`,
+        [
+          id,
+          input.category_id ?? null,
+          primaryName,
+          input.name_en?.trim() || null,
+          input.name_si?.trim() || null,
+          input.sku?.trim() || null,
+          input.barcode?.trim() || null,
+          input.price_cents,
+          input.cost_cents,
+        ]
+      );
       if (input.opening_quantity_milli > 0) {
-        await tx.runAsync(`INSERT INTO stock_movements (id,product_id,movement_type,quantity_delta_milli,note) VALUES (?,?,'initial_stock',?,'Opening inventory')`, [newId(), id, input.opening_quantity_milli]);
+        await tx.runAsync(
+          `INSERT INTO stock_movements (id, product_id, movement_type, quantity_delta_milli, note)
+           VALUES (?, ?, 'initial_stock', ?, 'Opening inventory')`,
+          [newId(), id, input.opening_quantity_milli]
+        );
       }
     });
     this.stock.clearCache();
     return id;
+  }
+
+  /** Bilingual catalog search across name, name_en, name_si, sku, and barcode. */
+  async searchProducts(query: string, categoryId?: string | null) {
+    return this.products.searchBilingual(query, categoryId);
   }
 
   async createCategory(name: string, color?: string): Promise<string> {

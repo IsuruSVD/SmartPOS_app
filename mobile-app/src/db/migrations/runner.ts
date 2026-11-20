@@ -3,6 +3,7 @@ import { runTransaction } from '../connection';
 import { up as migration001 } from './001_initial';
 import { up as migration002 } from './002_operations';
 import { up as migration003 } from './003_reports_and_store_profile';
+import { up as migration004 } from './004_bilingual_products';
 
 interface Migration {
   version: number;
@@ -13,6 +14,7 @@ const ALL_MIGRATIONS: Migration[] = [
   { version: 1, up: migration001 },
   { version: 2, up: migration002 },
   { version: 3, up: migration003 },
+  { version: 4, up: migration004 },
   // Append future migrations here — never reorder or remove existing entries.
 ];
 

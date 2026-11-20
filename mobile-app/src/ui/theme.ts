@@ -1,4 +1,45 @@
-export const colors = {
+export interface ThemeColors {
+  primary: string;
+  primaryLight: string;
+  primaryDark: string;
+  accent: string;
+  accentLight: string;
+  accentHover: string;
+  primaryTint: string;
+  accentGradientStart: string;
+  accentGradientEnd: string;
+
+  // Status & semantic colors
+  success: string;
+  successDark: string;
+  successLight: string;
+  warning: string;
+  warningDark: string;
+  warningLight: string;
+  danger: string;
+  dangerDark: string;
+  dangerLight: string;
+  info: string;
+  infoLight: string;
+
+  // Neutrals & Surfaces
+  background: string;
+  backgroundSecondary: string;
+  surface: string;
+  surfaceSubtle: string;
+  cardBackground: string;
+  border: string;
+  borderDark: string;
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  white: string;
+
+  // Category palette (for dynamic product tags & avatars)
+  categoryColors: { bg: string; text: string; border: string }[];
+}
+
+export const lightColors: ThemeColors = {
   primary: '#0F172A', // Slate 900
   primaryLight: '#1E293B', // Slate 800
   primaryDark: '#020617', // Slate 950
@@ -27,6 +68,7 @@ export const colors = {
   backgroundSecondary: '#F1F5F9', // Slate 100
   surface: '#FFFFFF',
   surfaceSubtle: '#F8FAFC',
+  cardBackground: '#FFFFFF',
   border: '#E2E8F0', // Slate 200
   borderDark: '#CBD5E1', // Slate 300
   text: '#0F172A', // Slate 900
@@ -34,7 +76,7 @@ export const colors = {
   textMuted: '#94A3B8', // Slate 400
   white: '#FFFFFF',
 
-  // Category palette (for dynamic product tags & avatars)
+  // Category palette
   categoryColors: [
     { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' }, // Blue
     { bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' }, // Green
@@ -45,25 +87,80 @@ export const colors = {
   ],
 };
 
+export const darkColors: ThemeColors = {
+  primary: '#38BDF8', // Sky 400 / Vibrant in dark mode
+  primaryLight: '#60A5FA', // Blue 400
+  primaryDark: '#1E293B', // Slate 800
+  accent: '#3B82F6', // Vibrant Electric Blue
+  accentLight: '#60A5FA',
+  accentHover: '#2563EB',
+  primaryTint: 'rgba(59, 130, 246, 0.15)',
+  accentGradientStart: '#3B82F6',
+  accentGradientEnd: '#6366F1',
+
+  // Status & semantic colors
+  success: '#10B981', // Emerald 500
+  successDark: '#059669',
+  successLight: 'rgba(16, 185, 129, 0.15)',
+  warning: '#F59E0B', // Amber 500
+  warningDark: '#D97706',
+  warningLight: 'rgba(245, 158, 11, 0.15)',
+  danger: '#EF4444', // Red 500
+  dangerDark: '#DC2626',
+  dangerLight: 'rgba(239, 68, 68, 0.15)',
+  info: '#38BDF8',
+  infoLight: 'rgba(56, 189, 248, 0.15)',
+
+  // Neutrals & Surfaces (Deep Midnight Dark Theme)
+  background: '#090D16', // Deep Midnight
+  backgroundSecondary: '#0F172A', // Slate 900
+  surface: '#1E293B', // Slate 800
+  surfaceSubtle: '#162032',
+  cardBackground: '#1E293B',
+  border: '#334155', // Slate 700
+  borderDark: '#475569', // Slate 600
+  text: '#F8FAFC', // Slate 50 (High contrast light text)
+  textSecondary: '#94A3B8', // Slate 400
+  textMuted: '#64748B', // Slate 500
+  white: '#FFFFFF',
+
+  // Category palette (Dark adapted)
+  categoryColors: [
+    { bg: 'rgba(59, 130, 246, 0.2)', text: '#93C5FD', border: 'rgba(59, 130, 246, 0.4)' },
+    { bg: 'rgba(16, 185, 129, 0.2)', text: '#6EE7B7', border: 'rgba(16, 185, 129, 0.4)' },
+    { bg: 'rgba(139, 92, 246, 0.2)', text: '#C4B5FD', border: 'rgba(139, 92, 246, 0.4)' },
+    { bg: 'rgba(249, 115, 22, 0.2)', text: '#FDBA74', border: 'rgba(249, 115, 22, 0.4)' },
+    { bg: 'rgba(236, 72, 153, 0.2)', text: '#F9A8D4', border: 'rgba(236, 72, 153, 0.4)' },
+    { bg: 'rgba(20, 184, 166, 0.2)', text: '#5EEAD4', border: 'rgba(20, 184, 166, 0.4)' },
+  ],
+};
+
+// Default fallback colors (Light)
+export const colors = lightColors;
+
+export function getThemeColors(mode: 'light' | 'dark'): ThemeColors {
+  return mode === 'dark' ? darkColors : lightColors;
+}
+
 export const shadows = {
   sm: {
-    shadowColor: '#0F172A',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 1,
   },
   card: {
-    shadowColor: '#0F172A',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.10,
     shadowRadius: 6,
     elevation: 2,
   },
   floating: {
-    shadowColor: '#0F172A',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.16,
     shadowRadius: 16,
     elevation: 8,
   },
@@ -83,15 +180,15 @@ export const spacing = {
   lg: 16,
   xl: 20,
   xxl: 24,
-  touchTarget: 48, // Minimum accessible touch target in dp
+  touchTarget: 48,
 };
 
 export const typography = {
-  h1: { fontSize: 24, fontWeight: '700' as const, color: colors.text },
-  h2: { fontSize: 20, fontWeight: '700' as const, color: colors.text },
-  h3: { fontSize: 16, fontWeight: '600' as const, color: colors.text },
-  body: { fontSize: 14, fontWeight: '400' as const, color: colors.text },
-  bodySecondary: { fontSize: 14, fontWeight: '400' as const, color: colors.textSecondary },
-  caption: { fontSize: 12, fontWeight: '500' as const, color: colors.textMuted },
-  mono: { fontSize: 16, fontWeight: '600' as const, color: colors.text },
+  h1: { fontSize: 24, fontWeight: '700' as const },
+  h2: { fontSize: 20, fontWeight: '700' as const },
+  h3: { fontSize: 16, fontWeight: '600' as const },
+  body: { fontSize: 14, fontWeight: '400' as const },
+  bodySecondary: { fontSize: 14, fontWeight: '400' as const },
+  caption: { fontSize: 12, fontWeight: '500' as const },
+  mono: { fontSize: 16, fontWeight: '600' as const },
 };

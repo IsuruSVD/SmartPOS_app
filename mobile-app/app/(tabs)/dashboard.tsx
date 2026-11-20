@@ -13,6 +13,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDb } from '../_layout';
 import type { Sale } from '../../src/db/types';
 import { colors, spacing, shadows } from '../../src/ui/theme';
+import { useTheme } from '../../src/ui/ThemeContext';
+import { useLanguage } from '../../src/i18n/LanguageContext';
 import { Header } from '../../src/ui/components/Header';
 import { Card } from '../../src/ui/components/Card';
 import { EmptyState } from '../../src/ui/components/EmptyState';
@@ -34,6 +36,8 @@ const money = (cents: number) => `LKR ${(cents / 100).toFixed(2)}`;
 export default function DashboardScreen() {
   const db = useDb();
   const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const { t } = useLanguage();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [recent, setRecent] = useState<RecentSale[]>([]);
 
@@ -83,8 +87,8 @@ export default function DashboardScreen() {
   useFocusEffect(useCallback(() => { load().catch(() => undefined); }, [load]));
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title="Dashboard" subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <Header title={t('nav_dashboard')} subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
         {/* Quick Action Command Center */}
@@ -99,78 +103,78 @@ export default function DashboardScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionTileSecondary}
+            style={[styles.actionTileSecondary, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => router.push('/(tabs)/products')}
             accessibilityLabel="Manage Inventory"
           >
             <Ionicons name="cube-outline" size={20} color={colors.primary} />
-            <Text style={styles.actionTileSecondaryText}>Catalog</Text>
+            <Text style={[styles.actionTileSecondaryText, { color: colors.text }]}>{t('nav_products')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionTileSecondary}
+            style={[styles.actionTileSecondary, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => router.push('/(tabs)/sales')}
             accessibilityLabel="Transactions"
           >
             <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-            <Text style={styles.actionTileSecondaryText}>History</Text>
+            <Text style={[styles.actionTileSecondaryText, { color: colors.text }]}>{t('nav_sales')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionTileSecondary}
+            style={[styles.actionTileSecondary, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => router.push('/(tabs)/settings')}
             accessibilityLabel="Reports & Z-Report"
           >
             <Ionicons name="pie-chart-outline" size={20} color={colors.primary} />
-            <Text style={styles.actionTileSecondaryText}>Reports</Text>
+            <Text style={[styles.actionTileSecondaryText, { color: colors.text }]}>{t('nav_settings')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Executive KPI Grid */}
         <View style={styles.grid}>
           {/* Net Sales */}
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.kpiTop}>
-              <Text style={styles.kpiLabel}>Today's Sales</Text>
-              <View style={[styles.kpiIconBubble, { backgroundColor: '#EFF6FF' }]}>
+              <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{t('today_sales')}</Text>
+              <View style={[styles.kpiIconBubble, { backgroundColor: isDark ? 'rgba(37,99,235,0.2)' : '#EFF6FF' }]}>
                 <Ionicons name="trending-up" size={18} color={colors.accent} />
               </View>
             </View>
-            <Text style={styles.kpiValue}>{metrics ? money(metrics.salesCents) : '--'}</Text>
-            <Text style={styles.kpiSub}>Net completed revenue</Text>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{metrics ? money(metrics.salesCents) : '--'}</Text>
+            <Text style={[styles.kpiSub, { color: colors.textMuted }]}>Net completed revenue</Text>
           </View>
 
           {/* Transactions & AOV */}
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.kpiTop}>
-              <Text style={styles.kpiLabel}>Orders</Text>
-              <View style={[styles.kpiIconBubble, { backgroundColor: '#ECFDF5' }]}>
+              <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{t('total_orders')}</Text>
+              <View style={[styles.kpiIconBubble, { backgroundColor: isDark ? 'rgba(16,185,129,0.2)' : '#ECFDF5' }]}>
                 <Ionicons name="receipt" size={18} color={colors.success} />
               </View>
             </View>
-            <Text style={styles.kpiValue}>{metrics ? String(metrics.transactionCount) : '--'}</Text>
-            <Text style={styles.kpiSub}>Avg Ticket: {metrics ? money(metrics.avgOrderCents) : '--'}</Text>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{metrics ? String(metrics.transactionCount) : '--'}</Text>
+            <Text style={[styles.kpiSub, { color: colors.textMuted }]}>Avg Ticket: {metrics ? money(metrics.avgOrderCents) : '--'}</Text>
           </View>
 
           {/* Est. Gross Profit */}
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.kpiTop}>
-              <Text style={styles.kpiLabel}>Gross Profit</Text>
-              <View style={[styles.kpiIconBubble, { backgroundColor: '#F5F3FF' }]}>
+              <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{t('gross_profit')}</Text>
+              <View style={[styles.kpiIconBubble, { backgroundColor: isDark ? 'rgba(124,58,237,0.2)' : '#F5F3FF' }]}>
                 <Ionicons name="analytics" size={18} color="#7C3AED" />
               </View>
             </View>
-            <Text style={styles.kpiValue}>{metrics ? money(metrics.grossProfitCents) : '--'}</Text>
-            <View style={styles.marginPill}>
+            <Text style={[styles.kpiValue, { color: colors.text }]}>{metrics ? money(metrics.grossProfitCents) : '--'}</Text>
+            <View style={[styles.marginPill, isDark && { backgroundColor: 'rgba(124,58,237,0.2)' }]}>
               <Text style={styles.marginPillText}>{metrics ? `${metrics.profitMarginPct}% Margin` : '0% Margin'}</Text>
             </View>
           </View>
 
           {/* Inventory Health */}
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.kpiTop}>
-              <Text style={styles.kpiLabel}>Low Stock Items</Text>
-              <View style={[styles.kpiIconBubble, { backgroundColor: (metrics?.lowStockCount ?? 0) > 0 ? '#FEF2F2' : '#F0FDF4' }]}>
+              <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{t('low_stock_alerts')}</Text>
+              <View style={[styles.kpiIconBubble, { backgroundColor: (metrics?.lowStockCount ?? 0) > 0 ? (isDark ? 'rgba(239,68,68,0.2)' : '#FEF2F2') : (isDark ? 'rgba(16,185,129,0.2)' : '#F0FDF4') }]}>
                 <Ionicons
                   name={(metrics?.lowStockCount ?? 0) > 0 ? "alert-circle" : "checkmark-circle"}
                   size={18}
@@ -178,10 +182,10 @@ export default function DashboardScreen() {
                 />
               </View>
             </View>
-            <Text style={[styles.kpiValue, (metrics?.lowStockCount ?? 0) > 0 ? { color: colors.danger } : {}]}>
+            <Text style={[styles.kpiValue, (metrics?.lowStockCount ?? 0) > 0 ? { color: colors.danger } : { color: colors.text }]}>
               {metrics ? String(metrics.lowStockCount) : '--'}
             </Text>
-            <Text style={styles.kpiSub}>
+            <Text style={[styles.kpiSub, { color: colors.textMuted }]}>
               {(metrics?.lowStockCount ?? 0) > 0 ? 'Requires attention' : 'All items well stocked'}
             </Text>
           </View>
@@ -189,9 +193,9 @@ export default function DashboardScreen() {
 
         {/* Payment Tender Distribution Bar */}
         {metrics && metrics.salesCents > 0 && (
-          <View style={styles.tenderMixCard}>
-            <Text style={styles.cardHeaderTitle}>Today's Payment Mix</Text>
-            <View style={styles.mixBarTrack}>
+          <View style={[styles.tenderMixCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.cardHeaderTitle, { color: colors.text }]}>Today's Payment Mix</Text>
+            <View style={[styles.mixBarTrack, { backgroundColor: colors.backgroundSecondary }]}>
               <View
                 style={[
                   styles.mixBarSegment,
@@ -218,11 +222,11 @@ export default function DashboardScreen() {
             <View style={styles.mixLegendRow}>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-                <Text style={styles.legendText}>Cash ({money(metrics.cashSalesCents)})</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>Cash ({money(metrics.cashSalesCents)})</Text>
               </View>
               <View style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
-                <Text style={styles.legendText}>Card ({money(metrics.cardSalesCents)})</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>Card ({money(metrics.cardSalesCents)})</Text>
               </View>
             </View>
           </View>
@@ -231,27 +235,27 @@ export default function DashboardScreen() {
         {/* Recent Transactions List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Invoices</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('recent_activity')}</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/sales')}>
               <Text style={styles.viewAllText}>View All →</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.recentList}>
+          <View style={[styles.recentList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {recent.length ? (
               recent.map((sale) => (
                 <TouchableOpacity
                   key={sale.id}
-                  style={styles.recentRow}
+                  style={[styles.recentRow, { borderBottomColor: colors.border }]}
                   activeOpacity={0.7}
                   onPress={() => router.push('/(tabs)/sales')}
                 >
-                  <View style={styles.invoiceIconCircle}>
+                  <View style={[styles.invoiceIconCircle, { backgroundColor: colors.backgroundSecondary }]}>
                     <Ionicons name="receipt-outline" size={18} color={colors.primary} />
                   </View>
                   <View style={styles.recentDetails}>
-                    <Text style={styles.invoice}>{sale.invoice_number}</Text>
-                    <Text style={styles.recentMeta}>
+                    <Text style={[styles.invoice, { color: colors.text }]}>{sale.invoice_number}</Text>
+                    <Text style={[styles.recentMeta, { color: colors.textSecondary }]}>
                       {new Date(sale.completed_at ?? sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ·{' '}
                       {sale.payment_methods.toUpperCase() || 'PAID'}
                     </Text>

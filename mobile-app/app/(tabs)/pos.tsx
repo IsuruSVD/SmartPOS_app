@@ -18,6 +18,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDb } from '../_layout';
 import type { Category, PaymentMethod, Product } from '../../src/db/types';
 import { colors, spacing, shadows } from '../../src/ui/theme';
+import { useTheme } from '../../src/ui/ThemeContext';
+import { useLanguage } from '../../src/i18n/LanguageContext';
 import { Header } from '../../src/ui/components/Header';
 import { EmptyState } from '../../src/ui/components/EmptyState';
 import { Button } from '../../src/ui/components/Button';
@@ -30,6 +32,8 @@ const money = (cents: number) => `LKR ${(cents / 100).toFixed(2)}`;
 export default function PosScreen() {
   const db = useDb();
   const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const { language, t, getProductName } = useLanguage();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,7 +106,11 @@ export default function PosScreen() {
   const available = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     return products.filter((p) => {
-      const matchesQuery = !q || [p.name, p.sku, p.barcode].some((value) => value?.toLocaleLowerCase().includes(q));
+      const matchesQuery =
+        !q ||
+        [p.name, p.name_en, p.name_si, p.sku, p.barcode].some((value) =>
+          value?.toLocaleLowerCase().includes(q)
+        );
       const matchesCategory = !selectedCategory || p.category_id === selectedCategory;
       return matchesQuery && matchesCategory;
     });
@@ -201,7 +209,7 @@ export default function PosScreen() {
         : undefined;
 
       const itemsSnapshot = cartItems.map(({ product, quantity }) => ({
-        name: product.name,
+        name: getProductName(product, language),
         qty: quantity / 1000,
         lineTotal: Math.round(product.price_cents * quantity / 1000),
       }));
@@ -424,9 +432,9 @@ export default function PosScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search by name, SKU or barcode..."
+            placeholder={t('search_placeholder')}
             placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             accessibilityLabel="Search catalog"
           />
           {search ? (
@@ -498,7 +506,8 @@ export default function PosScreen() {
           const qtyInCart = (cart[item.id] ?? 0) / 1000;
           const onHand = (stockMap[item.id] ?? 0) / 1000;
           const theme = getCategoryTheme(item.category_id);
-          const initial = item.name.charAt(0).toUpperCase();
+          const displayName = getProductName(item, language);
+          const initial = displayName.charAt(0).toUpperCase();
 
           if (viewMode === 'grid') {
             return (
@@ -506,7 +515,7 @@ export default function PosScreen() {
                 activeOpacity={0.7}
                 style={[styles.gridCard, qtyInCart > 0 && styles.gridCardSelected]}
                 onPress={() => addToCart(item.id)}
-                accessibilityLabel={`Add ${item.name}`}
+                accessibilityLabel={`Add ${displayName}`}
               >
                 {qtyInCart > 0 && (
                   <View style={styles.cartBadge}>
@@ -516,7 +525,7 @@ export default function PosScreen() {
                 <View style={[styles.productAvatar, { backgroundColor: theme.bg, borderColor: theme.border }]}>
                   <Text style={[styles.avatarText, { color: theme.text }]}>{initial}</Text>
                 </View>
-                <Text style={styles.gridProductName} numberOfLines={2}>{item.name}</Text>
+                <Text style={styles.gridProductName} numberOfLines={2}>{displayName}</Text>
                 <Text style={styles.gridProductPrice}>{money(item.price_cents)}</Text>
                 <View style={styles.gridStockRow}>
                   {item.track_stock ? (
@@ -541,7 +550,7 @@ export default function PosScreen() {
                 <Text style={[styles.avatarText, { color: theme.text }]}>{initial}</Text>
               </View>
               <View style={styles.listDetails}>
-                <Text style={styles.listProductName}>{item.name}</Text>
+                <Text style={styles.listProductName}>{displayName}</Text>
                 <Text style={styles.listProductMeta}>
                   {item.sku ? `SKU: ${item.sku} · ` : ''}
                   {item.track_stock ? `${onHand} in stock` : 'Active'}
@@ -615,7 +624,7 @@ export default function PosScreen() {
                 return (
                   <View key={product.id} style={styles.cartItemRow}>
                     <View style={styles.cartItemInfo}>
-                      <Text style={styles.cartItemName}>{product.name}</Text>
+                      <Text style={styles.cartItemName}>{getProductName(product, language)}</Text>
                       <Text style={styles.cartItemUnitPrice}>{money(product.price_cents)} each</Text>
                     </View>
                     <View style={styles.cartItemStepper}>

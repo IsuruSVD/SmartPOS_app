@@ -7,7 +7,8 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 export interface ButtonProps {
   title: string;
@@ -30,13 +31,15 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   icon,
 }) => {
+  const { colors } = useTheme();
+
   const getBackgroundColor = () => {
     if (disabled) return colors.border;
     switch (variant) {
       case 'primary':
         return colors.accent;
       case 'secondary':
-        return colors.primaryLight;
+        return colors.surfaceSubtle;
       case 'outline':
         return 'transparent';
       case 'danger':
@@ -49,6 +52,7 @@ export const Button: React.FC<ButtonProps> = ({
   const getTextColor = () => {
     if (disabled) return colors.textMuted;
     if (variant === 'outline') return colors.accent;
+    if (variant === 'secondary') return colors.text;
     return colors.white;
   };
 
@@ -60,7 +64,7 @@ export const Button: React.FC<ButtonProps> = ({
       style={[
         styles.button,
         { backgroundColor: getBackgroundColor() },
-        variant === 'outline' && styles.outlineBorder,
+        variant === 'outline' && [styles.outlineBorder, { borderColor: colors.accent }],
         style,
       ]}
     >
@@ -81,17 +85,16 @@ const styles = StyleSheet.create({
     minHeight: spacing.touchTarget,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
   },
   outlineBorder: {
     borderWidth: 1.5,
-    borderColor: colors.accent,
   },
   text: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

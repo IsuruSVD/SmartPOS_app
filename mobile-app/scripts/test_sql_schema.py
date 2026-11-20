@@ -25,7 +25,12 @@ class MigrationSmokeTest(unittest.TestCase):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);")
-        for version, filename in ((1, "001_initial.ts"), (2, "002_operations.ts"), (3, "003_reports_and_store_profile.ts")):
+        for version, filename in (
+            (1, "001_initial.ts"),
+            (2, "002_operations.ts"),
+            (3, "003_reports_and_store_profile.ts"),
+            (4, "004_bilingual_products.ts"),
+        ):
             self.db.execute("BEGIN IMMEDIATE")
             self.db.executescript(migration_sql(filename))
             self.db.execute("INSERT INTO schema_migrations VALUES (?, 'smoke-test')", (version,))
@@ -41,7 +46,12 @@ class MigrationSmokeTest(unittest.TestCase):
         self.assertEqual(settings["currency_code"], "LKR")
         self.assertEqual(settings["next_invoice_number"], "1")
         self.assertEqual(settings["store_name"], "TechknowLK Store")
-        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 3)
+        self.assertEqual(settings["theme_preference"], "system")
+        self.assertEqual(settings["app_language"], "en")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 4)
+        product_cols = {row[1] for row in self.db.execute("PRAGMA table_info(products)")}
+        self.assertIn("name_en", product_cols)
+        self.assertIn("name_si", product_cols)
         sale_item_cols = {row[1] for row in self.db.execute("PRAGMA table_info(sale_items)")}
         self.assertIn("unit_cost_cents", sale_item_cols)
 
@@ -146,6 +156,76 @@ class MigrationSmokeTest(unittest.TestCase):
         prod_count = self.db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
         self.assertEqual(prod_count, initial_prod_count)
         self.assertIsNotNone(self.db.execute("SELECT id FROM products WHERE id='p_safe'").fetchone())
+
+    def test_bilingual_product_search_and_indexes(self):
+        # Verify indexes exist
+        indexes = {row[1] for row in self.db.execute("PRAGMA index_list('products')")}
+        self.assertIn("idx_products_name_en", indexes)
+        self.assertIn("idx_products_name_si", indexes)
+
+        # Seed bilingual products
+        self.db.execute(
+            """INSERT INTO products (id, name, name_en, name_si, sku, barcode, price_cents)
+               VALUES ('p_tea', 'Dilmah Tea', 'Dilmah Premium Ceylon Tea', 'ඩිල්මා සිලෝන් තේ', 'BEV-001', '4791001001015', 85000)"""
+        )
+        self.db.execute(
+            """INSERT INTO products (id, name, name_en, name_si, sku, barcode, price_cents)
+               VALUES ('p_sugar', 'White Sugar', 'Fortune Refined White Sugar', 'සුදු සීනි', 'GRO-001', '4794004004016', 28000)"""
+        )
+        self.db.commit()
+
+        # Helper for bilingual search query
+        def search(term):
+            pat = f"%{term.lower()}%"
+            return self.db.execute(
+                """SELECT id, name FROM products
+                   WHERE deleted_at IS NULL
+                     AND (
+                       LOWER(name) LIKE ?
+                       OR (name_en IS NOT NULL AND LOWER(name_en) LIKE ?)
+                       OR (name_si IS NOT NULL AND LOWER(name_si) LIKE ?)
+                       OR (sku IS NOT NULL AND LOWER(sku) LIKE ?)
+                       OR (barcode IS NOT NULL AND LOWER(barcode) LIKE ?)
+                     )
+                   ORDER BY name ASC""",
+                (pat, pat, pat, pat, pat)
+            ).fetchall()
+
+        # 1. English query
+        results = search("Dilmah")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], "p_tea")
+
+        # 2. Sinhala Unicode query
+        results_si = search("සීනි")  # Sugar in Sinhala
+        self.assertEqual(len(results_si), 1)
+        self.assertEqual(results_si[0][0], "p_sugar")
+
+        # 3. Sinhala Unicode query for Tea
+        results_tea_si = search("ඩිල්මා")
+        self.assertEqual(len(results_tea_si), 1)
+        self.assertEqual(results_tea_si[0][0], "p_tea")
+
+        # 4. SKU query
+        results_sku = search("bev-001")
+        self.assertEqual(len(results_sku), 1)
+        self.assertEqual(results_sku[0][0], "p_tea")
+
+        # 5. Barcode query
+        results_barcode = search("4794004004016")
+        self.assertEqual(len(results_barcode), 1)
+        self.assertEqual(results_barcode[0][0], "p_sugar")
+
+    def test_existing_product_name_migration_to_name_en(self):
+        # Insert a product with just name
+        self.db.execute("INSERT INTO products (id, name, price_cents) VALUES ('p_legacy', 'Legacy Product', 5000)")
+        # Run the backfill update query like migration 004 does
+        self.db.execute("UPDATE products SET name_en = name WHERE id = 'p_legacy' AND name_en IS NULL")
+        self.db.commit()
+
+        row = self.db.execute("SELECT name, name_en FROM products WHERE id = 'p_legacy'").fetchone()
+        self.assertEqual(row[0], "Legacy Product")
+        self.assertEqual(row[1], "Legacy Product")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { colors, spacing, shadows } from '../theme';
+import { spacing, shadows } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 interface HeaderProps {
   title: string;
@@ -16,18 +16,20 @@ export const Header: React.FC<HeaderProps> = ({
   rightAction,
   showOfflineBadge = true,
 }) => {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
       <View style={styles.titleArea}>
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{title}</Text>
         <View style={styles.subtitleRow}>
           {showOfflineBadge && (
-            <View style={styles.offlineBadge}>
-              <View style={styles.dot} />
-              <Text style={styles.offlineText}>Ready</Text>
+            <View style={[styles.offlineBadge, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+              <View style={[styles.dot, { backgroundColor: colors.success }]} />
+              <Text style={[styles.offlineText, { color: colors.successDark }]}>Ready</Text>
             </View>
           )}
-          {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+          {subtitle ? <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text> : null}
         </View>
       </View>
       {rightAction ? <View style={styles.rightAction}>{rightAction}</View> : null}
@@ -37,12 +39,10 @@ export const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: colors.primary,
     letterSpacing: -0.3,
   },
   subtitleRow: {
@@ -70,7 +69,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 11,
-    color: colors.textSecondary,
     fontWeight: '500',
     flexShrink: 1,
     minWidth: 0,
@@ -78,12 +76,10 @@ const styles = StyleSheet.create({
   offlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.successLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
     gap: 4,
     flexShrink: 0,
   },
@@ -91,12 +87,10 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: colors.success,
   },
   offlineText: {
     fontSize: 9,
     fontWeight: '700',
-    color: colors.successDark,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },

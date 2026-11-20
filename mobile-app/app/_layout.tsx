@@ -2,6 +2,8 @@
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Slot } from 'expo-router';
 import { DatabaseService } from '../src/db/services/DatabaseService';
+import { ThemeProvider } from '../src/ui/ThemeContext';
+import { LanguageProvider } from '../src/i18n/LanguageContext';
 
 export const DbContext = createContext<DatabaseService | null>(null);
 
@@ -54,7 +56,11 @@ export default function RootLayout() {
 
   return (
     <DbContext.Provider value={db}>
-      <Slot />
+      <ThemeProvider db={db}>
+        <LanguageProvider db={db}>
+          <Slot />
+        </LanguageProvider>
+      </ThemeProvider>
     </DbContext.Provider>
   );
 }

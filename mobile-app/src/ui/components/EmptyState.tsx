@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
+import { useTheme } from '../ThemeContext';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -18,11 +19,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   actionTitle,
   onAction,
 }) => {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.container}>
       {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>{description}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
       {actionTitle && onAction ? (
         <Button title={actionTitle} onPress={onAction} style={styles.actionBtn} />
       ) : null}
@@ -44,13 +47,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '700',
-    color: colors.primary,
     marginBottom: spacing.xs,
     textAlign: 'center',
   },
   description: {
     fontSize: 14,
-    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
